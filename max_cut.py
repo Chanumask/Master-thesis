@@ -10,7 +10,7 @@ from qiskit.primitives import Estimator
 from qiskit_algorithms.optimizers import COBYLA
 from qiskit_algorithms.minimum_eigensolvers import VQE
 
-from util import get_solution, plot_solution
+from util import get_solution, plot_solution, create_hea, add_cyclic_entanglement
 
 
 def generate_random_graph(num_nodes, connectivity_prob, max_weight):
@@ -45,45 +45,16 @@ def get_hamiltonian(nxgraph):
     return quadratic.to_ising()
 
 
-def add_cyclic_entanglement(circuit, entangle_prob):
-    """Add cyclic entanglement using CX gates at the beginning of the circuit."""
-    num_qubits = circuit.num_qubits
-    entanglements_added = 0
-
-    for i in range(num_qubits):
-        if np.random.rand() < entangle_prob:  # Randomly decide to add entanglement
-            circuit.cx(i, (i + 1) % num_qubits)
-            entanglements_added += 1
-
-    return circuit, entanglements_added
-
-
-def create_custom_entanglement_map(num_qubits, remove_entangle_prob):
-    """Create a custom entanglement map with some entanglements removed."""
-    entanglement_map = []
-    for i in range(num_qubits - 1):
-        if np.random.rand() >= remove_entangle_prob:
-            entanglement_map.append((i, i + 1))
-    # Optionally add entanglement between the last and first qubits
-    if np.random.rand() >= remove_entangle_prob:
-        entanglement_map.append((num_qubits - 1, 0))
-    return entanglement_map
-
-
-def solve_maxcut(weighted_edges, qubits, reps, entangle_probability):
+def solve_maxcut(weighted_edges, qubits, ansatz_depth, entangle_ratio):
     """Solve the MaxCut problem using VQE and return the solution."""
     graph = construct_graph(weighted_edges)
     hamiltonian, offset = get_hamiltonian(graph)
 
-    # Create a custom entanglement map for the ansatz
-    remove_entangle_prob = 1 - entangle_probability
-    entanglement_map = create_custom_entanglement_map(qubits, remove_entangle_prob)
-    n_entanglements_ansatz = len(entanglement_map)
-
-    ansatz = RealAmplitudes(num_qubits=qubits, reps=reps)  # read paper
+    # ansatz = RealAmplitudes(num_qubits=qubits, reps=ansatz_depth)
+    ansatz = create_hea(qubits, ansatz_depth, entangle_ratio)
 
     full_circuit = QuantumCircuit(qubits)
-    full_circuit, n_entanglements = add_cyclic_entanglement(full_circuit, entangle_probability)
+    full_circuit, n_entanglements = add_cyclic_entanglement(full_circuit, entangle_ratio)
     full_circuit.compose(ansatz, inplace=True)
 
     # print(full_circuit.decompose().draw())
@@ -91,7 +62,7 @@ def solve_maxcut(weighted_edges, qubits, reps, entangle_probability):
 
     estimator = Estimator()
     optimizer = COBYLA()  # read paper
-    vqe = VQE(estimator, ansatz, optimizer)
+    vqe = VQE(estimator, full_circuit, optimizer)
     result = vqe.compute_minimum_eigenvalue(hamiltonian)
 
     optimal_state = ansatz.assign_parameters(result.optimal_parameters)
@@ -108,11 +79,11 @@ def evaluate_vqe_performance(optimal_value, target_value=None):
         print(f"Energy Difference: {abs(optimal_value - target_value):.4f}")
 
 
-def log_vqe_results(nodes, connectivity, reps, optimal_value, entangle_probability, entanglements,
+def log_vqe_results(nodes, connectivity, reps, optimal_value, entangle_ratio, entanglements,
                     file_path, target_value=None):
     """Log the VQE results to a CSV file."""
-    fieldnames = ['nodes', 'connectivity', 'reps', 'optimal_value', 'target_value', 'energy_difference',
-                  'entangle_prob', 'n_entanglements']
+    fieldnames = ['nodes', 'connectivity', 'ansatz_reps', 'optimal_value', 'target_value', 'energy_difference',
+                  'entangle_ratio', 'n_entanglements']
     file_exists = os.path.isfile(file_path)
 
     with open(file_path, mode='a', newline='') as file:
@@ -127,16 +98,16 @@ def log_vqe_results(nodes, connectivity, reps, optimal_value, entangle_probabili
         writer.writerow({
             'nodes': nodes,
             'connectivity': connectivity,
-            'reps': reps,
+            'ansatz_reps': reps,
             'optimal_value': optimal_value,
             'target_value': target_value if target_value is not None else 'N/A',
             'energy_difference': energy_difference,
-            'entangle_prob': entangle_probability,
+            'entangle_ratio': entangle_ratio,
             'n_entanglements': entanglements,
         })
 
 
-def max_cut_random_graph(nodes, connectivity, maximum_weight, reps, entangle_probability, filepath):
+def max_cut_random_graph(nodes, connectivity, maximum_weight, reps, entangle_ratio, filepath):
     """Solve the MaxCut problem on a randomly generated graph using VQE."""
     # Generate a random graph with specified number of nodes and connectivity
     num_nodes = nodes
@@ -146,10 +117,10 @@ def max_cut_random_graph(nodes, connectivity, maximum_weight, reps, entangle_pro
     random_graph = generate_random_graph(num_nodes, connectivity_prob, maximum_weight)
     weighted_edges = construct_weighted_edges_from_graph(random_graph)
 
-    optimal_state, optimal_value, entanglements = solve_maxcut(weighted_edges, num_nodes, reps, entangle_probability)
+    optimal_state, optimal_value, entanglements = solve_maxcut(weighted_edges, num_nodes, reps, entangle_ratio)
 
     distribution, solution = get_solution(optimal_state)
     plot_solution(distribution, solution, "histogram_max_cut.png")
     evaluate_vqe_performance(optimal_value, target_value=-10)
-    log_vqe_results(nodes, connectivity, reps, optimal_value, entangle_probability, entanglements, filepath,
+    log_vqe_results(nodes, connectivity, reps, optimal_value, entangle_ratio, entanglements, filepath,
                     target_value=None)

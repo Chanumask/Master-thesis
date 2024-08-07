@@ -4,11 +4,11 @@ from max_cut import max_cut_random_graph
 import pandas as pd
 
 
-def run_multiple_iterations(nodes, connectivity, max_weight, ansatz_reps, entangle_probability, iterations, filepath):
+def run_multiple_iterations(nodes, connectivity, max_weight, ansatz_reps, entangle_ratio, iterations, filepath):
     """Run multiple iterations of the MaxCut problem to collect statistical data."""
     for i in range(iterations):
         print(f"Running iteration {i + 1}/{iterations}")
-        max_cut_random_graph(nodes, connectivity, max_weight, ansatz_reps, entangle_probability, filepath)
+        max_cut_random_graph(nodes, connectivity, max_weight, ansatz_reps, entangle_ratio, filepath)
 
 
 def evaluate_csv(filepath):
@@ -31,7 +31,7 @@ if __name__ == '__main__':
         connectivity=0.8,
         max_weight=10,
         ansatz_reps=3,
-        entangle_probability=1.0,
+        entangle_ratio=1.0,
         iterations=1,
         filepath="vqe_results.csv")
     # evaluate_csv("vqe_results.csv")
