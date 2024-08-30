@@ -68,7 +68,7 @@ def add_cyclic_entanglement(circuit, entangle_ratio):
     return circuit, entanglements_added
 
 
-def create_hea(num_qubits, depth, entangle_ratio):
+def create_hea_with_entangle_ratio(num_qubits, depth, entangle_ratio):
     """Creates a hardware efficient ansatz using RX and RY gates for rotations with given depth."""
     circuit = QuantumCircuit(num_qubits)
     parameters = {
@@ -88,6 +88,8 @@ def create_hea(num_qubits, depth, entangle_ratio):
 
             # Randomly select pairs to entangle based on the entangle_ratio
             all_pairs = [(i, i + 1) for i in range(num_qubits - 1)]
+            # all_pairs.append((num_qubits-1, 0))
+            print(all_pairs, num_entanglements)
             if num_entanglements > 0:
                 selected_pairs = np.random.choice(len(all_pairs), num_entanglements, replace=False)
 
@@ -97,3 +99,22 @@ def create_hea(num_qubits, depth, entangle_ratio):
                     circuit.cx(qubit1, qubit2)
 
         return circuit
+
+
+def create_hea(num_qubits, depth, theta_list):
+    circuit = QuantumCircuit(num_qubits)
+
+    for d in range(depth):
+        for i in range(num_qubits):
+            circuit.add_gate(
+                merge(RY(i, theta_list[2 * i + 2 * num_qubits * d]), RZ(i, theta_list[2 * i + 1 + 2 * num_qubits * d])))
+        for i in range(num_qubits // 2):
+            circuit.add_gate(CZ(2 * i, 2 * i + 1))
+        for i in range(num_qubits // 2 - 1):
+            circuit.add_gate(CZ(2 * i + 1, 2 * i + 2))
+    for i in range(num_qubits):
+        circuit.add_gate(
+            merge(RY(i, theta_list[2 * i + 2 * num_qubits * depth]),
+                  RZ(i, theta_list[2 * i + 1 + 2 * num_qubits * depth])))
+
+    return circuit

@@ -13,6 +13,21 @@ from qiskit_algorithms.minimum_eigensolvers import VQE
 from util import get_solution, plot_solution, create_hea, add_cyclic_entanglement
 
 
+def generate_fully_connected_graph(num_nodes, max_weight):
+    # Create a fully connected graph (complete graph) with 8 nodes
+    g = nx.Graph()
+
+    # Add all possible edges between the 8 nodes with random weights
+    nodes = range(num_nodes)
+    for i in nodes:
+        for j in nodes:
+            if i < j:  # To ensure each edge is added only once
+                weight = np.random.randint(1, max_weight+1)
+                g.add_edge(i, j, weight=weight)
+
+    return g
+
+
 def generate_random_graph(num_nodes, connectivity_prob, max_weight):
     """Generate a random graph using the Erdős-Rényi model."""
     g = nx.erdos_renyi_graph(n=num_nodes, p=connectivity_prob)
@@ -20,7 +35,6 @@ def generate_random_graph(num_nodes, connectivity_prob, max_weight):
     # Assign random weights to each edge
     for (u, v) in g.edges():
         g.edges[u, v]['weight'] = np.random.randint(1, max_weight)  # Random weights between 1 and 10
-
     return g
 
 
@@ -45,13 +59,13 @@ def get_hamiltonian(nxgraph):
     return quadratic.to_ising()
 
 
-def solve_maxcut(weighted_edges, qubits, ansatz_depth, entangle_ratio):
-    """Solve the MaxCut problem using VQE and return the solution."""
-    graph = construct_graph(weighted_edges)
+def solve_maxcut(graph, qubits, ansatz_depth, entangle_ratio):
+    """Solve the MaxCut problem for a provided graph using VQE and return the solution."""
+
     hamiltonian, offset = get_hamiltonian(graph)
 
-    # ansatz = RealAmplitudes(num_qubits=qubits, reps=ansatz_depth)
-    ansatz = create_hea(qubits, ansatz_depth, entangle_ratio)
+    ansatz = RealAmplitudes(num_qubits=qubits, reps=ansatz_depth)
+    # ansatz = create_hea(qubits, ansatz_depth)
 
     full_circuit = QuantumCircuit(qubits)
     full_circuit, n_entanglements = add_cyclic_entanglement(full_circuit, entangle_ratio)
@@ -109,18 +123,40 @@ def log_vqe_results(nodes, connectivity, reps, optimal_value, entangle_ratio, en
 
 def max_cut_random_graph(nodes, connectivity, maximum_weight, reps, entangle_ratio, filepath):
     """Solve the MaxCut problem on a randomly generated graph using VQE."""
+
     # Generate a random graph with specified number of nodes and connectivity
-    num_nodes = nodes
-    connectivity_prob = connectivity  # Probability of edge between nodes
+    random_graph = generate_random_graph(nodes, connectivity, maximum_weight)
+    # weighted_edges = construct_weighted_edges_from_graph(random_graph)
 
-    # Generate and convert to weighted edges
-    random_graph = generate_random_graph(num_nodes, connectivity_prob, maximum_weight)
-    weighted_edges = construct_weighted_edges_from_graph(random_graph)
-
-    optimal_state, optimal_value, entanglements = solve_maxcut(weighted_edges, num_nodes, reps, entangle_ratio)
+    optimal_state, optimal_value, entanglements = solve_maxcut(random_graph, nodes, reps, entangle_ratio)
 
     distribution, solution = get_solution(optimal_state)
     plot_solution(distribution, solution, "histogram_max_cut.png")
-    evaluate_vqe_performance(optimal_value, target_value=-10)
+    evaluate_vqe_performance(optimal_value, target_value=-10)  # how to find out target value?
     log_vqe_results(nodes, connectivity, reps, optimal_value, entangle_ratio, entanglements, filepath,
                     target_value=None)
+
+
+def max_cut_given_graph(g, reps, entangle_ratio, filepath):
+    """Solve the MaxCut problem on a given NetworkX graph using VQE."""
+
+    optimal_state, optimal_value, entanglements = solve_maxcut(g, g.number_of_nodes(), reps, entangle_ratio)
+
+    distribution, solution = get_solution(optimal_state)
+    plot_solution(distribution, solution, "histogram_max_cut.png")
+
+    # Evaluate performance (set target_value to None if unknown)
+    target_value = None  # Replace with actual target value if known
+    evaluate_vqe_performance(optimal_value, target_value)
+
+    # Log results to CSV
+    log_vqe_results(
+        g.number_of_nodes(),
+        None,  # No connectivity value available since the graph is given directly
+        reps,
+        optimal_value,
+        entangle_ratio,
+        entanglements,
+        filepath,
+        target_value
+    )
