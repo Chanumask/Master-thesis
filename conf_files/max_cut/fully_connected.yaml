@@ -1,0 +1,12 @@
+problem_class: max_cut
+
+max_cut:
+  graph_type: fully_connected  # Options: random, fully_connected, n-regular.yaml
+  nodes: 10
+  max_weight: 10
+
+vqe_parameters:
+  ansatz_layers: 1
+  entangle_ratio: 1.0
+  iterations: 10
+  filepath: "results_max_cut.csv"
