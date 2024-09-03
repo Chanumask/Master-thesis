@@ -8,9 +8,9 @@ from qiskit.primitives import Estimator
 from qiskit_algorithms.optimizers import COBYLA
 from qiskit_algorithms.minimum_eigensolvers import VQE
 
-from eval import evaluate_vqe_performance, log_vqe_results
-from eval import get_solution, plot_solution
-from vqe import create_hea, add_cyclic_entanglement, create_hea_with_entangle_ratio
+from util import Result, log_vqe_results
+from eval import evaluate_vqe_performance, get_solution, plot_solution
+from vqe import add_cyclic_entanglement
 
 
 def max_cut_random_graph(nodes, connectivity, maximum_weight, reps, entangle_ratio, filepath):
@@ -33,25 +33,24 @@ def max_cut_given_graph(g, reps, entangle_ratio, filepath):
     """Solve the MaxCut problem on a given NetworkX graph using VQE."""
 
     optimal_state, optimal_value, entanglements = solve_maxcut(g, g.number_of_nodes(), reps, entangle_ratio)
-
     distribution, solution = get_solution(optimal_state)
-    plot_solution(distribution, solution, "histogram_max_cut.png")
-
-    # Evaluate performance (set target_value to None if unknown)
-    target_value = None  # Replace with actual target value if known
-    evaluate_vqe_performance(optimal_value, target_value)
 
     # Log results to CSV
-    log_vqe_results(
-        g.number_of_nodes(),
-        None,  # No connectivity value available since the graph is given directly
-        reps,
-        optimal_value,
-        entangle_ratio,
-        entanglements,
-        filepath,
-        target_value
+    result = Result(
+        nodes=g.number_of_nodes(),
+        graph=g,  # g.edges() ?
+        reps=reps,
+        optimal_value=optimal_value,
+        distribution=distribution,
+        solution=solution,
+        entangle_ratio=entangle_ratio,
+        entanglements=entanglements,
+        filepath=filepath
     )
+
+    result.compute_energy_difference()
+
+    return result
 
 
 ##################

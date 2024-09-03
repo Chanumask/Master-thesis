@@ -9,4 +9,4 @@ vqe_parameters:
   ansatz_layers: 1
   entangle_ratio: 1.0
   iterations: 10
-  filepath: "results_max_cut.csv"
+  filepath: "results/results_fully_connected.csv"

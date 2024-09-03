@@ -1,6 +1,3 @@
-import csv
-import os
-
 import matplotlib.pyplot as plt
 import pandas as pd
 from qiskit import transpile
@@ -19,8 +16,10 @@ def run_circuit(circuit):
 def get_solution(optimal_state):
     """Run the sampler, obtain the solution distribution and get the most probable solution."""
     sampler = Sampler(options={"shots": 1024})
-    distribution = sampler.run([optimal_state]).result().quasi_dists[0]
-    solution = max(distribution.binary_probabilities().items(), key=lambda x: x[1])
+    result = sampler.run([optimal_state]).result()
+
+    distribution = {format(key, f'0{optimal_state.num_qubits}b'): prob for key, prob in result.quasi_dists[0].items()}
+    solution = max(distribution.items(), key=lambda x: x[1])
     return distribution, solution
 
 
@@ -59,32 +58,7 @@ def evaluate_vqe_performance(optimal_value, target_value=None):
         print(f"Energy Difference: {abs(optimal_value - target_value):.4f}")
 
 
-def log_vqe_results(nodes, connectivity, reps, optimal_value, entangle_ratio, entanglements,
-                    file_path, target_value=None):
-    """Log the VQE results to a CSV file."""
-    fieldnames = ['nodes', 'connectivity', 'ansatz_reps', 'optimal_value', 'target_value', 'energy_difference',
-                  'entangle_ratio', 'n_entanglements']
-    file_exists = os.path.isfile(file_path)
 
-    with open(file_path, mode='a', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-
-        if not file_exists:
-            writer.writeheader()  # Write header only if the file does not exist
-
-        # Calculate energy difference if target value is provided
-        energy_difference = abs(optimal_value - target_value) if target_value is not None else 'N/A'
-
-        writer.writerow({
-            'nodes': nodes,
-            'connectivity': connectivity,
-            'ansatz_reps': reps,
-            'optimal_value': optimal_value,
-            'target_value': target_value if target_value is not None else 'N/A',
-            'energy_difference': energy_difference,
-            'entangle_ratio': entangle_ratio,
-            'n_entanglements': entanglements,
-        })
 
 
 def evaluate_csv(filepath):

@@ -10,4 +10,4 @@ vqe_parameters:
   ansatz_layers: 1
   entangle_ratio: 1.0
   iterations: 10
-  filepath: "results_random_graph.csv"
+  filepath: "results/results_random.csv"
