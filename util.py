@@ -16,8 +16,7 @@ class Result:
     distribution: Dict[str, float]  # Mapping of states to their probabilities
     solution: Tuple[str, float]  # Most probable state and its probability
     entangle_ratio: float
-    entanglements: int
-    filepath: str
+    # entanglements: int
     target_value: Optional[float] = None  # Default to None if not provided
     energy_difference: Optional[float] = field(default=None, init=False)
 

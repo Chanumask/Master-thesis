@@ -1,8 +1,9 @@
 import matplotlib.pyplot as plt
-import pandas as pd
 from qiskit import transpile
 from qiskit.primitives import Sampler
-from qiskit_aer import AerSimulator
+from qiskit_aer import AerSimulator, StatevectorSimulator
+from qiskit.quantum_info import DensityMatrix, partial_trace, entropy, concurrence, purity
+from qiskit import QuantumCircuit
 
 
 def run_circuit(circuit):
@@ -13,8 +14,18 @@ def run_circuit(circuit):
     return counts
 
 
+def simulate_statevector(circuit: QuantumCircuit):
+    """Simulates the circuit using Aers StateVectorSimulator and returns the results statevector"""
+    simulator = StatevectorSimulator()
+    transpiled_circuit = transpile(circuit, simulator)
+    result = simulator.run(transpiled_circuit).result()
+    statevector = result.get_statevector()
+    return statevector
+
+
 def get_solution(optimal_state):
     """Run the sampler, obtain the solution distribution and get the most probable solution."""
+    optimal_state.measure_all()
     sampler = Sampler(options={"shots": 1024})
     result = sampler.run([optimal_state]).result()
 
@@ -50,24 +61,27 @@ def plot_solution(dist, sol, filename):
         print(f"Node {i}: {group}")
 
 
-def evaluate_vqe_performance(optimal_value, target_value=None):
-    """Evaluate and print the performance of VQE."""
-    print(f"Optimal Energy: {optimal_value:.4f}")
-    if target_value is not None:
-        print(f"Target Energy: {target_value:.4f}")
-        print(f"Energy Difference: {abs(optimal_value - target_value):.4f}")
+def calculate_entanglement_metrics(circuit: QuantumCircuit):
+    """Calculate various entanglement metrics for an (optimized) quantum circuit."""
+    # Simulate the statevector of the optimized circuit
+    statevector = simulate_statevector(circuit)
 
+    # Create a density matrix from the statevector
+    rho = DensityMatrix(statevector)
 
+    # Calculate metrics
+    metrics = {}
+    num_qubits = circuit.num_qubits
 
+    # 1. Entanglement Entropy
+    metrics['entanglement_entropy'] = entropy(rho)
 
+    # 2. Concurrence for the first two qubits
+    if num_qubits >= 2:
+        partial_rho_2q = partial_trace(rho, list(range(2, num_qubits)))
+        metrics['concurrence'] = concurrence(partial_rho_2q)
 
-def evaluate_csv(filepath):
-    data = pd.read_csv(filepath)
+    # 3. Purity
+    metrics['purity'] = purity(rho)
 
-    average_optimal_values = data.groupby('n_entanglements')['optimal_value'].mean()
-    sample_counts = data['n_entanglements'].value_counts().sort_index()
-
-    print("Average Optimal Value per Number of Entanglements:")
-    print(average_optimal_values)
-    print("\nSample Count per Number of Entanglements:")
-    print(sample_counts)
+    return metrics
