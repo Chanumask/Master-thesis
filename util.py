@@ -19,6 +19,7 @@ class Result:
     # entanglements: int
     target_value: Optional[float] = None  # Default to None if not provided
     energy_difference: Optional[float] = field(default=None, init=False)
+    entanglement_metrics: Dict[str, float] = None
 
     def compute_energy_difference(self):
         """Calculate the energy difference if target_value is provided."""

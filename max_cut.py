@@ -14,22 +14,29 @@ from vqe import add_cyclic_entanglement, create_hea
 
 def run_vqe_for_max_cut(g, config):
     """Solve the MaxCut problem on a given NetworkX graph using VQE."""
-    optimal_state, optimal_value = get_optimal_state(g, config)
+    qubits = g.number_of_nodes()
+    hamiltonian, offset = get_hamiltonian(g)
 
-    entanglement_metrics = calculate_entanglement_metrics(optimal_state)
+    ansatz, vqe = create_vqe(config, qubits)
+
+    result = vqe.compute_minimum_eigenvalue(hamiltonian)
+    optimized_ansatz = ansatz.assign_parameters(result.optimal_parameters)
+
+    entanglement_metrics = calculate_entanglement_metrics(optimized_ansatz)
     print(entanglement_metrics)
 
-    distribution, solution = get_solution(optimal_state)
+    distribution, solution = get_solution(optimized_ansatz)
 
     # Log results to CSV
     result = Result(
         nodes=g.number_of_nodes(),
         graph=g,  # g.edges() ?
         reps=config['vqe_parameters']['ansatz_layers'],
-        optimal_value=optimal_value,
+        optimal_value=result.optimal_value,
         distribution=distribution,
         solution=solution,
         entangle_ratio=config['vqe_parameters']['entangle_ratio'],
+        entanglement_metrics=entanglement_metrics
     )
     result.compute_energy_difference()
     return result
@@ -40,19 +47,6 @@ def get_hamiltonian(nxgraph):
     maxcut = Maxcut(nxgraph)
     quadratic = maxcut.to_quadratic_program()
     return quadratic.to_ising()
-
-
-def get_optimal_state(graph, config):
-    """create the hamiltionian for the graph, use the vqe compute minimum eigenvalues and return the optimal state"""
-    qubits = graph.number_of_nodes()
-    hamiltonian, offset = get_hamiltonian(graph)
-
-    ansatz, vqe = create_vqe(config, qubits)
-    result = vqe.compute_minimum_eigenvalue(hamiltonian)
-
-    optimal_state = ansatz.assign_parameters(result.optimal_parameters)
-
-    return optimal_state, result.optimal_value
 
 
 def create_vqe(config, qubits):

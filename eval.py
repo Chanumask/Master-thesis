@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
+import numpy as np
 from qiskit import transpile
 from qiskit.primitives import Sampler
-from qiskit_aer import AerSimulator, StatevectorSimulator
+from qiskit_aer import AerSimulator, StatevectorSimulator, Aer
 from qiskit.quantum_info import DensityMatrix, partial_trace, entropy, concurrence, purity
 from qiskit import QuantumCircuit
 
@@ -61,17 +62,17 @@ def plot_solution(dist, sol, filename):
         print(f"Node {i}: {group}")
 
 
-def calculate_entanglement_metrics(circuit: QuantumCircuit):
+def calculate_entanglement_metrics(optimized_circuit: QuantumCircuit):
     """Calculate various entanglement metrics for an (optimized) quantum circuit."""
     # Simulate the statevector of the optimized circuit
-    statevector = simulate_statevector(circuit)
+    statevector = simulate_statevector(optimized_circuit)
 
     # Create a density matrix from the statevector
     rho = DensityMatrix(statevector)
 
     # Calculate metrics
     metrics = {}
-    num_qubits = circuit.num_qubits
+    num_qubits = optimized_circuit.num_qubits
 
     # 1. Entanglement Entropy
     metrics['entanglement_entropy'] = entropy(rho)
@@ -84,4 +85,53 @@ def calculate_entanglement_metrics(circuit: QuantumCircuit):
     # 3. Purity
     metrics['purity'] = purity(rho)
 
+    # 4. Entanglement per qubit (von Neumann entropy)
+    # https://journals.aps.org/prxquantum/pdf/10.1103/PRXQuantum.3.040339
+    # https: // journals.aps.org / pra / pdf / 10.1103 / PhysRevA.109.032413
+    # e_per_qubit = (2 * np.log2(chi)) / num_qubits
+    entropies = []
+    for i in range(num_qubits):
+        # Partial trace over the other qubits to get the reduced density matrix for qubit i
+        partial_rho = partial_trace(rho, [j for j in range(num_qubits) if j != i])
+        # Calculate the von Neumann entropy for qubit i
+        entropies.append(entropy(partial_rho))
+
+    average_entanglement_per_qubit = np.mean(entropies)
+    print(average_entanglement_per_qubit)
+    metrics['e_per_qubit'] = average_entanglement_per_qubit
+
+    # 5 averaged Meyer-Wallach entanglement measure  http://arxiv.org/abs/1905.10876
+    mw = mw_measure(optimized_circuit, num_qubits)
+    print(mw)
+    metrics['meyer_wallach'] = mw
+
     return metrics
+
+
+def mw_measure(circuit, num_qubits, sample=1024):
+    """
+    Returns the meyer-wallach entanglement measure for the given circuit.
+    """
+
+    temp = np.zeros(sample, dtype=complex)
+    N = num_qubits
+
+    for i in range(sample):
+        statevector = simulate_statevector(circuit)
+        entropy_mw = 0
+        qb_list = list(range(N))
+
+        # rho_k after tracing out the rest
+        for j in range(N):
+            rest = qb_list[:j] + qb_list[j + 1:]
+            dens = partial_trace(statevector, rest).data
+            trace = np.trace(np.matmul(dens, dens))  # rho_k^2
+            entropy_mw += trace
+
+        entropy_mw /= N
+        temp[i] = 1.0 - entropy_mw
+
+    # Meyer-Wallach measure
+    Q = 2 * np.sum(temp).real / sample
+
+    return Q
