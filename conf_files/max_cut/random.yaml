@@ -1,4 +1,6 @@
 problem_class: max_cut
+iterations: 1
+filepath: "results/results_random.csv"
 
 max_cut:
   graph_type: random  # Options: random, fully_connected, n-regular.yaml
@@ -9,5 +11,5 @@ max_cut:
 vqe_parameters:
   ansatz_layers: 1
   entangle_ratio: 1.0
-  iterations: 10
-  filepath: "results/results_random.csv"
+  ansatz_type: HEA  # Options: RealAmplitudes, EfficientSU2, HEA
+  optimizer: COBYLA            # Options: COBYLA, SPSA, NELDER_MEAD

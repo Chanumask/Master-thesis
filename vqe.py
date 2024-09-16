@@ -60,24 +60,27 @@ def create_hea_with_entangle_ratio(num_qubits, depth, entangle_ratio):
 def create_hea(num_qubits, depth):
     circuit = QuantumCircuit(num_qubits)
 
-    # Generate a list of 2 * num_qubits * (depth + 1) random integers between 0 and 100
-    theta_list = [random.randint(0, 100) for _ in range(2 * num_qubits * (depth + 1))]
+    # Create parameter objects for each rotation angle
+    theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(2 * (depth + 1))]
 
+    # Loop over depth and apply RY, RZ gates with parameterized angle (2 params per qubit per layer)
     for d in range(depth):
         for i in range(num_qubits):
-            theta_ry = (theta_list[2 * i + 2 * num_qubits * d] / 100) * 2 * np.pi
-            theta_rz = (theta_list[2 * i + 1 + 2 * num_qubits * d] / 100) * 2 * np.pi
+            theta_ry = theta_list[2 * i + 2 * num_qubits * d]
+            theta_rz = theta_list[2 * i + 1 + 2 * num_qubits * d]
             circuit.ry(theta_ry, i)
             circuit.rz(theta_rz, i)
 
+        # Apply CZ gates for entanglement
         for i in range(num_qubits // 2):
             circuit.cz(2 * i, 2 * i + 1)
         for i in range(num_qubits // 2 - 1):
             circuit.cz(2 * i + 1, 2 * i + 2)
 
+    # Apply final RY, RZ gates with parameterized angles
     for i in range(num_qubits):
-        theta_ry = (theta_list[2 * i + 2 * num_qubits * depth] / 100) * 2 * np.pi
-        theta_rz = (theta_list[2 * i + 1 + 2 * num_qubits * depth] / 100) * 2 * np.pi
+        theta_ry = theta_list[2 * i + 2 * num_qubits * depth]
+        theta_rz = theta_list[2 * i + 1 + 2 * num_qubits * depth]
         circuit.ry(theta_ry, i)
         circuit.rz(theta_rz, i)
 

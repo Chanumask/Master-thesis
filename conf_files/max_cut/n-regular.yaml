@@ -1,12 +1,14 @@
 problem_class: max_cut
+iterations: 1
+filepath: "results/results_regular.csv"
 
 max_cut:
-  graph_type: n-regular  # Options: random, fully_connected, 3-regular
+  graph_type: 3-regular  # Options: random, fully_connected, 3-regular
   nodes: 10
   degree: 3             # n edges at each node
 
 vqe_parameters:
   ansatz_layers: 1
   entangle_ratio: 1.0
-  iterations: 10
-  filepath: "results/results_regular.csv"
+  ansatz_type: HEA  # Options: RealAmplitudes, EfficientSU2, HEA
+  optimizer: COBYLA            # Options: COBYLA, SPSA, NELDER_MEAD

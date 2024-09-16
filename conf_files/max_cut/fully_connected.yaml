@@ -10,5 +10,5 @@ max_cut:
 vqe_parameters:
   ansatz_layers: 1
   entangle_ratio: 1.0
-  ansatz_type: RealAmplitudes  # Options: RealAmplitudes, EfficientSU2, soon more
+  ansatz_type: HEA  # Options: RealAmplitudes, EfficientSU2, HEA
   optimizer: COBYLA            # Options: COBYLA, SPSA, NELDER_MEAD

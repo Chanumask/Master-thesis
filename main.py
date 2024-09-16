@@ -27,7 +27,7 @@ def run_experiment(config_file, logging, plotting):
 if __name__ == '__main__':
     np.random.seed(1)
 
-    config = load_config('conf_files/max_cut/fully_connected.yaml')
+    config = load_config('conf_files/max_cut/random.yaml')
 
     save_results = True
     plot_results = False
