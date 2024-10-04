@@ -4,18 +4,15 @@ import os
 import yaml
 from typing import Optional, Dict, Tuple
 from dataclasses import dataclass, field, asdict
-import networkx as nx
 
 
 @dataclass
 class Result:
-    nodes: int
-    graph: nx.classes.Graph
-    reps: int
+    graph_edges: list
+
     optimal_value: float
     distribution: Dict[str, float]  # Mapping of states to their probabilities
     solution: Tuple[str, float]  # Most probable state and its probability
-    entangle_ratio: float
     # entanglements: int
     target_value: Optional[float] = None  # Default to None if not provided
     energy_difference: Optional[float] = field(default=None, init=False)
@@ -36,10 +33,16 @@ def load_config(file_path):
     return config
 
 
-def log_vqe_results(result, file_path):
-    """Log the VQE results to a CSV file."""
-    result_dict = asdict(result)
+def log_vqe_results(result, config, file_path):
+    """Log the VQE results together with parameters from the config file to a CSV file."""
 
+    # Add all relevant information from the config file.
+    relevant_config = {
+        **config.get('max_cut', {}),
+        **config.get('vqe_parameters', {})
+    }
+    result_dict = {**relevant_config}  # Start with config fields
+    result_dict.update(asdict(result))
     fieldnames = result_dict.keys()
 
     file_exists = os.path.isfile(file_path)
@@ -48,6 +51,6 @@ def log_vqe_results(result, file_path):
         writer = csv.DictWriter(file, fieldnames=fieldnames)
 
         if not file_exists:
-            writer.writeheader()  # Write header only if the file does not exist
+            writer.writeheader()
 
         writer.writerow(result_dict)

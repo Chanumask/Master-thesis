@@ -3,12 +3,12 @@ iterations: 1
 filepath: "results/results_fully_connected.csv"
 
 max_cut:
-  graph_type: fully_connected  # Options: random, fully_connected, n-regular.yaml
+  graph_type: fully_connected
   nodes: 10
   max_weight: 10
 
 vqe_parameters:
-  ansatz_layers: 1
+  ansatz_layers: 1  # [1,3,5]
   entangle_ratio: 1.0
   ansatz_type: HEA  # Options: RealAmplitudes, EfficientSU2, HEA
   optimizer: COBYLA            # Options: COBYLA, SPSA, NELDER_MEAD

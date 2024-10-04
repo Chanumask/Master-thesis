@@ -35,33 +35,6 @@ def get_solution(optimal_state):
     return distribution, solution
 
 
-def plot_solution(dist, sol, filename):
-    """Plots histogram and prints most probable solution."""
-    # Check if 'dist' indeed includes all states, if not, the previous method will be necessary
-    # Here we assume it includes all states
-
-    # Extracting probability data
-    probabilities = dist.binary_probabilities()
-
-    # Plotting
-    fig, ax = plt.subplots()
-    ax.bar(probabilities.keys(), probabilities.values(), color='blue')
-    ax.set_xlabel('State')
-    ax.set_ylabel('Probability')
-    ax.set_title('Probability Distribution of Quantum States')
-    plt.xticks(rotation=90)  # Rotate state labels for better visibility
-    plt.tight_layout()
-
-    # Save the figure
-    plt.savefig(filename)
-    plt.show()
-
-    # Print most probable solution
-    print(f"State: {sol[0]}, Probability: {sol[1]}")
-    for i, group in enumerate(reversed(sol[0])):
-        print(f"Node {i}: {group}")
-
-
 def calculate_entanglement_metrics(optimized_circuit: QuantumCircuit):
     """Calculate various entanglement metrics for an (optimized) quantum circuit."""
     # Simulate the statevector of the optimized circuit
@@ -97,12 +70,12 @@ def calculate_entanglement_metrics(optimized_circuit: QuantumCircuit):
         entropies.append(entropy(partial_rho))
 
     average_entanglement_per_qubit = np.mean(entropies)
-    print(average_entanglement_per_qubit)
+    # print(average_entanglement_per_qubit)
     metrics['e_per_qubit'] = average_entanglement_per_qubit
 
     # 5 averaged Meyer-Wallach entanglement measure  http://arxiv.org/abs/1905.10876
     mw = mw_measure(optimized_circuit, num_qubits)
-    print(mw)
+    # print(mw)
     metrics['meyer_wallach'] = mw
 
     return metrics

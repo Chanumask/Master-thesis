@@ -1,6 +1,7 @@
 import numpy as np
 
 from max_cut import generate_graph_from_config, run_vqe_for_max_cut
+from plotting import plot_metrics_from_csv
 from util import load_config, log_vqe_results
 
 
@@ -19,7 +20,11 @@ def run_experiment(config_file, logging, plotting):
             result_list.append(result)
 
             if logging:
-                log_vqe_results(result, filepath)
+                log_vqe_results(result, config_file, filepath)
+
+            if plotting:
+                plot_metrics_from_csv('all', 'results')
+
     else:
         raise ValueError("Unsupported problem class in configuration.")
 

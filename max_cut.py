@@ -23,20 +23,15 @@ def run_vqe_for_max_cut(g, config):
     optimized_ansatz = ansatz.assign_parameters(result.optimal_parameters)
 
     entanglement_metrics = calculate_entanglement_metrics(optimized_ansatz)
-    print(entanglement_metrics)
-
+    # print(entanglement_metrics)
     distribution, solution = get_solution(optimized_ansatz)
-
     # Log results to CSV
     result = Result(
-        nodes=g.number_of_nodes(),
-        graph=g,  # g.edges() ?
-        reps=config['vqe_parameters']['ansatz_layers'],
+        graph_edges=list(g.edges()),
         optimal_value=result.optimal_value,
         distribution=distribution,
         solution=solution,
-        entangle_ratio=config['vqe_parameters']['entangle_ratio'],
-        entanglement_metrics=entanglement_metrics
+        entanglement_metrics=entanglement_metrics,
     )
     result.compute_energy_difference()
     return result
