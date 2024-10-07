@@ -1,6 +1,8 @@
 problem_class: max_cut
-iterations: 1
+iterations: 2 # how many runs using the same seed
 filepath: "results/results_fully_connected.csv"
+base_seed: 42
+num_seeds: 1
 
 max_cut:
   graph_type: fully_connected

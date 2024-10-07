@@ -12,7 +12,7 @@ from util import Result
 from vqe import add_cyclic_entanglement, create_hea
 
 
-def run_vqe_for_max_cut(g, config):
+def run_vqe_for_max_cut(g, config, seed):
     """Solve the MaxCut problem on a given NetworkX graph using VQE."""
     qubits = g.number_of_nodes()
     hamiltonian, offset = get_hamiltonian(g)
@@ -32,6 +32,7 @@ def run_vqe_for_max_cut(g, config):
         distribution=distribution,
         solution=solution,
         entanglement_metrics=entanglement_metrics,
+        seed=seed,
     )
     result.compute_energy_difference()
     return result

@@ -1,13 +1,21 @@
 import csv
 import os
 
+import numpy as np
 import yaml
 from typing import Optional, Dict, Tuple
 from dataclasses import dataclass, field, asdict
 
 
+def generate_deterministic_seeds(base_seed, num_seeds):
+    """Generate a list of deterministic seeds."""
+    rng = np.random.default_rng(base_seed)
+    return [rng.integers(0, 10000) for _ in range(num_seeds)]
+
+
 @dataclass
 class Result:
+    seed: int
     graph_edges: list
 
     optimal_value: float
