@@ -21,17 +21,28 @@ class Result:
     optimal_value: float
     distribution: Dict[str, float]  # Mapping of states to their probabilities
     solution: Tuple[str, float]  # Most probable state and its probability
-    # entanglements: int
-    target_value: Optional[float] = None  # Default to None if not provided
-    energy_difference: Optional[float] = field(default=None, init=False)
-    entanglement_metrics: Dict[str, float] = None
+    cut_cost: int  # summed weights of edges that have been cut by the most probable solution
 
-    def compute_energy_difference(self):
+    brute_forced_cost: Optional[float] = None
+    cut_cost_difference: Optional[float] = field(default=None, init=False)
+    approximation_ratio: Optional[float] = field(default=None, init=False)
+
+    entanglement_metrics: Dict[str, float] = None
+    energy_history: [float] = None
+
+    def compute_cut_cost_difference(self):
         """Calculate the energy difference if target_value is provided."""
-        if self.target_value is not None:
-            self.energy_difference = abs(self.optimal_value - self.target_value)
+        if self.brute_forced_cost is not None:
+            self.cut_cost_difference = abs(self.cut_cost - self.brute_forced_cost)
         else:
-            self.energy_difference = None
+            self.cut_cost_difference = None
+
+    def compute_approximation_ratio(self):
+        """Calculate the approximation ratio based on the VQE cut cost and brute-forced optimal cost."""
+        if self.brute_forced_cost and self.brute_forced_cost != 0:
+            self.approximation_ratio = self.cut_cost / self.brute_forced_cost
+        else:
+            self.approximation_ratio = None
 
 
 def load_config(file_path):

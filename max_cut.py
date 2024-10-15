@@ -1,5 +1,7 @@
 import networkx as nx
 import numpy as np
+import itertools
+
 from qiskit import QuantumCircuit
 from qiskit.circuit.library import RealAmplitudes, EfficientSU2
 from qiskit.primitives import Estimator
@@ -7,17 +9,43 @@ from qiskit_algorithms.minimum_eigensolvers import VQE
 from qiskit_algorithms.optimizers import COBYLA, SPSA, NELDER_MEAD
 from qiskit_optimization.applications import Maxcut
 
-from eval import get_solution, calculate_entanglement_metrics
+from eval import get_solution, calculate_entanglement_metrics, calculate_cut_cost
 from util import Result
 from vqe import add_cyclic_entanglement, create_hea
+
+global_energy_history = []
+
+
+def brute_force_max_cut(graph):
+    """Brute-force method to find the optimal Max-Cut value for a given graph."""
+    num_nodes = graph.number_of_nodes()
+    max_cut_value = float('-inf')
+
+    # Iterate through all possible 2^n binary configurations of the nodes
+    for cut in itertools.product([0, 1], repeat=num_nodes):
+        cut_value = 0
+
+        # Calculate the weight of the cut for the current configuration
+        for u, v, weight in graph.edges(data='weight'):
+            if cut[u] != cut[v]:  # u and v are in different partitions
+                cut_value += weight
+
+        max_cut_value = max(max_cut_value, cut_value)
+
+    return max_cut_value
 
 
 def run_vqe_for_max_cut(g, config, seed):
     """Solve the MaxCut problem on a given NetworkX graph using VQE."""
+    global global_energy_history
+    global_energy_history = []
+
     qubits = g.number_of_nodes()
     hamiltonian, offset = get_hamiltonian(g)
 
     ansatz, vqe = create_vqe(config, qubits)
+
+    vqe.callback = vqe_callback
 
     result = vqe.compute_minimum_eigenvalue(hamiltonian)
     optimized_ansatz = ansatz.assign_parameters(result.optimal_parameters)
@@ -25,16 +53,25 @@ def run_vqe_for_max_cut(g, config, seed):
     entanglement_metrics = calculate_entanglement_metrics(optimized_ansatz)
     # print(entanglement_metrics)
     distribution, solution = get_solution(optimized_ansatz)
+    bitstring_solution = solution[0]  # the most probable solution
+    cut_cost = calculate_cut_cost(g, bitstring_solution)  # Calculate the cut cost based on the solution
+    optimal_cut_value = brute_force_max_cut(g)
+
     # Log results to CSV
     result = Result(
         graph_edges=list(g.edges()),
         optimal_value=result.optimal_value,
         distribution=distribution,
         solution=solution,
+        cut_cost=cut_cost,
+        brute_forced_cost=optimal_cut_value,
         entanglement_metrics=entanglement_metrics,
+        energy_history=global_energy_history,
         seed=seed,
     )
-    result.compute_energy_difference()
+    result.compute_cut_cost_difference()
+    result.compute_approximation_ratio()
+    print(f"approx. ratio: {result.approximation_ratio}")
     return result
 
 
@@ -83,6 +120,12 @@ def create_vqe(config, qubits):
 
     return ansatz, vqe
 
+
+def vqe_callback(eval_count, params, energy, metadata):
+    """Callback function to store the energy at each iteration.""" 
+    global global_energy_history
+    if eval_count % 10 == 0:    # only save every 10th value
+        global_energy_history.append(float(round(energy,4)))
 
 ##################
 

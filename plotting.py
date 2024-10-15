@@ -1,4 +1,5 @@
 import ast
+import csv
 import os
 
 import pandas as pd
@@ -47,3 +48,32 @@ def plot_metrics_from_csv(relevant_metrics, results_folder):
             plt.legend()
             plt.grid(True)
             plt.show()
+
+
+def plot_energy_history_from_csv(filepath):
+    """Plot the energy history from the result CSV."""
+    with open(filepath, mode='r') as file:
+        reader = csv.DictReader(file)
+
+        energy_histories = []
+        run_labels = []
+
+        for row in reader:
+            eh_string = row.get('energy_history', '')
+            if eh_string:
+                eh = ast.literal_eval(eh_string)
+                energy_histories.append(eh)
+                run_labels.append(f"Run {len(run_labels) + 1}")
+
+        plt.figure(figsize=(10, 6))
+
+        for i, energy_history in enumerate(energy_histories):
+            steps = [x * 10 for x in range(1, len(energy_history) + 1)]
+            plt.plot(steps, energy_history, marker='o', linestyle='-', label=run_labels[i])
+
+        plt.title('Energy History for Each Run')
+        plt.xlabel('Step')
+        plt.ylabel('Energy')
+        plt.legend(title='Runs')
+        plt.grid(True)
+        plt.savefig("results/energy_history_plot.png", format='png')

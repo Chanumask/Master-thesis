@@ -1,7 +1,7 @@
 import numpy as np
 
 from max_cut import generate_graph_from_config, run_vqe_for_max_cut
-from plotting import plot_metrics_from_csv
+from plotting import plot_metrics_from_csv, plot_energy_history_from_csv
 from util import load_config, log_vqe_results, generate_deterministic_seeds
 
 
@@ -35,13 +35,11 @@ def run_experiment(logging, plotting):
 
                 if plotting:
                     plot_metrics_from_csv('all', 'results')
+                    plot_energy_history_from_csv("results/results_fully_connected.csv")
 
     else:
         raise ValueError("Unsupported problem class in configuration.")
 
 
 if __name__ == '__main__':
-
-    save_results = True
-    plot_results = False
-    run_experiment(logging=True, plotting=False)
+    run_experiment(logging=True, plotting=True)

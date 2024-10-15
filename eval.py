@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 from qiskit import transpile
 from qiskit.primitives import Sampler
@@ -33,6 +32,16 @@ def get_solution(optimal_state):
     distribution = {format(key, f'0{optimal_state.num_qubits}b'): prob for key, prob in result.quasi_dists[0].items()}
     solution = max(distribution.items(), key=lambda x: x[1])
     return distribution, solution
+
+
+def calculate_cut_cost(graph, solution):
+    """Calculate the cost (number of cuts) for the Max-Cut problem based on the solution."""
+    cut_value = 0
+    for u, v, weight in graph.edges(data="weight", default=1):  # assuming graph edges have weights
+        # Check if the endpoints of the edge (u, v) are in different sets
+        if solution[u] != solution[v]:
+            cut_value += weight
+    return cut_value
 
 
 def calculate_entanglement_metrics(optimized_circuit: QuantumCircuit):
