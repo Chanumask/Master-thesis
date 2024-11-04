@@ -1,3 +1,6 @@
+import os
+import subprocess
+
 import networkx as nx
 import numpy as np
 import itertools
@@ -12,6 +15,7 @@ from qiskit_optimization.applications import Maxcut
 from eval import get_solution, calculate_entanglement_metrics, calculate_cut_cost
 from util import Result
 from vqe import add_cyclic_entanglement, create_hea
+from util import generate_qpic_circuit
 
 global_energy_history = []
 
@@ -86,6 +90,7 @@ def create_vqe(config, qubits):
     entangle_ratio = config['vqe_parameters']['entangle_ratio']
     ansatz_depth = config['vqe_parameters']['ansatz_layers']
     ansatz_type = config['vqe_parameters'].get('ansatz_type', 'RealAmplitudes')
+    plot_ansatz = config['vqe_parameters']['plot_ansatz']
     optimizer_choice = config['vqe_parameters'].get('optimizer', 'COBYLA')
 
     # Ansatz selection
@@ -97,6 +102,26 @@ def create_vqe(config, qubits):
         ansatz = create_hea(qubits, ansatz_depth)
     else:
         raise ValueError(f"Unsupported ansatz type: {ansatz_type}")
+
+    if plot_ansatz:
+        qpic_str = generate_qpic_circuit(ansatz)
+        print(qpic_str)
+        with open('circuit.qpic', 'w', encoding='utf-8') as file:
+            file.write(qpic_str)
+            quit()
+        # output_file = "circuit.png"
+        # try:
+        #     # Run qpic to generate a PNG
+        #     subprocess.run(["qpic", "-f", "png", qpic_file], check=True)
+        #
+        #     from PIL import Image
+        #     img = Image.open(output_file)
+        #     img.show()
+        #
+        # except subprocess.CalledProcessError as e:
+        #     print(f"Error generating the circuit image: {e}")
+        # finally:
+        #     os.remove(qpic_file)
 
     # Add Entanglement or introduce dropout
     full_circuit = QuantumCircuit(qubits)

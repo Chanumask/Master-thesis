@@ -14,4 +14,5 @@ vqe_parameters:
   ansatz_layers: 1
   entangle_ratio: 1.0
   ansatz_type: HEA  # Options: RealAmplitudes, EfficientSU2, HEA
+  plot_ansatz: False
   optimizer: COBYLA            # Options: COBYLA, SPSA, NELDER_MEAD

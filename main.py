@@ -5,9 +5,9 @@ from plotting import plot_metrics_from_csv, plot_energy_history_from_csv
 from util import load_config, log_vqe_results, generate_deterministic_seeds
 
 
-def run_experiment(logging, plotting):
+def run_experiment(config_name, logging, plotting):
     """Run the VQE experiment based on the configuration."""
-    config = load_config('conf_files/max_cut/fully_connected.yaml')
+    config = load_config(f'conf_files/max_cut/{config_name}.yaml')
     problem_class = config['problem_class']
 
     filepath = config['filepath']
@@ -35,11 +35,11 @@ def run_experiment(logging, plotting):
 
                 if plotting:
                     plot_metrics_from_csv('all', 'results')
-                    plot_energy_history_from_csv("results/results_fully_connected.csv")
+                    plot_energy_history_from_csv(f"results/{config_name}.csv")
 
     else:
         raise ValueError("Unsupported problem class in configuration.")
 
 
 if __name__ == '__main__':
-    run_experiment(logging=True, plotting=True)
+    run_experiment(config_name= "fully_connected", logging=False, plotting=False)

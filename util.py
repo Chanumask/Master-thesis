@@ -73,3 +73,73 @@ def log_vqe_results(result, config, file_path):
             writer.writeheader()
 
         writer.writerow(result_dict)
+
+
+import re
+
+def generate_qpic_circuit(circuit):
+    """
+    Generate a qpic-compatible string from a Qiskit QuantumCircuit object.
+
+    Args:
+        circuit (QuantumCircuit): A Qiskit quantum circuit.
+
+    Returns:
+        str: A string representation of the circuit in qpic format.
+    """
+    # Initialize the qpic string
+    qpic_lines = []
+
+    # Get the number of qubits
+    num_qubits = circuit.num_qubits
+
+    # Add qubit declarations (W denotes wire)
+    for i in range(num_qubits):
+        qpic_lines.append(f"q{i} W |q_{{{i}}}\\rangle")
+
+    # Iterate through the circuit data to add gates
+    for instruction, qubits, clbits in circuit.data:
+        gate_name = instruction.name.lower()
+        qubit_indices = [q._index for q in qubits]
+
+        if gate_name == "h":
+            # Hadamard gate
+            qpic_lines.append(f"q{qubit_indices[0]} H")
+        elif gate_name == "x":
+            # Pauli-X gate
+            qpic_lines.append(f"q{qubit_indices[0]} X")
+        elif gate_name == "cx":
+            # CNOT gate (control and target)
+            qpic_lines.append(f"q{qubit_indices[0]} q{qubit_indices[1]} CNOT")
+        elif gate_name == "cz":
+            # Controlled-Z gate (control and target)
+            qpic_lines.append(f"q{qubit_indices[0]} q{qubit_indices[1]} CZ")
+        elif gate_name in ["rx", "ry", "rz"]:
+            # Rotation gates with parameter theta
+            theta = instruction.params[0]
+            # Convert theta to string
+            theta_str = str(theta)
+            # Replace 'θ' with LaTeX '\theta'
+            theta_str = theta_str.replace('θ', '\\theta')
+            # Enclose subscripts in braces and replace underscores with commas
+            # e.g., '\theta_0_0' -> '\theta_{0,0}'
+            match = re.match(r'(\\theta)_(.+)', theta_str)
+            if match:
+                base = match.group(1)
+                subscripts = match.group(2).split('_')
+                subscripts_str = ','.join(subscripts)
+                theta_str = f"{base}_{{{subscripts_str}}}"
+            # Ensure parentheses are properly closed
+            qpic_lines.append(f"q{qubit_indices[0]} {gate_name.upper()}({theta_str})")
+        elif gate_name == "measure":
+            # Measurement gate
+            qpic_lines.append(f"q{qubit_indices[0]} M")
+        else:
+            # Other gates
+            qpic_lines.append(f"q{qubit_indices[0]} {gate_name.upper()}")
+
+    # Join all lines into a single string
+    qpic_str = '\n'.join(qpic_lines)
+
+    return qpic_str
+
