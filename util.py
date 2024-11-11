@@ -75,71 +75,92 @@ def log_vqe_results(result, config, file_path):
         writer.writerow(result_dict)
 
 
-import re
-
-def generate_qpic_circuit(circuit):
+def generate_qpic_circuit(circuit, scale_factor=1.0):
     """
     Generate a qpic-compatible string from a Qiskit QuantumCircuit object.
 
     Args:
         circuit (QuantumCircuit): A Qiskit quantum circuit.
+        scale_factor(float): scaling factor of the qpic elements, also given to latex as fontsize
 
     Returns:
         str: A string representation of the circuit in qpic format.
     """
-    # Initialize the qpic string
     qpic_lines = []
-
-    # Get the number of qubits
+    qpic_lines.append(f"SCALE {scale_factor}")
     num_qubits = circuit.num_qubits
+    num_clbits = circuit.num_clbits
 
-    # Add qubit declarations (W denotes wire)
+    # Add qubit and classical bit declarations
     for i in range(num_qubits):
         qpic_lines.append(f"q{i} W |q_{{{i}}}\\rangle")
+    for i in range(num_clbits):
+        qpic_lines.append(f"c{i} N")
+
+    measurements = {}
+    last_gate_type = None
+    gate_counter = 0
+
+    def close_block():
+        """Close the current block with LE if it's open."""
+        if last_gate_type is not None:
+            qpic_lines.append("LE")
+
+    def start_block(gate_type):
+        """Start a new block with LB if needed."""
+        qpic_lines.append("LB")
 
     # Iterate through the circuit data to add gates
     for instruction, qubits, clbits in circuit.data:
         gate_name = instruction.name.lower()
         qubit_indices = [q._index for q in qubits]
 
-        if gate_name == "h":
-            # Hadamard gate
-            qpic_lines.append(f"q{qubit_indices[0]} H")
-        elif gate_name == "x":
-            # Pauli-X gate
-            qpic_lines.append(f"q{qubit_indices[0]} X")
-        elif gate_name == "cx":
-            # CNOT gate (control and target)
-            qpic_lines.append(f"q{qubit_indices[0]} q{qubit_indices[1]} CNOT")
-        elif gate_name == "cz":
-            # Controlled-Z gate (control and target)
-            qpic_lines.append(f"q{qubit_indices[0]} q{qubit_indices[1]} CZ")
-        elif gate_name in ["rx", "ry", "rz"]:
-            # Rotation gates with parameter theta
-            theta = instruction.params[0]
-            # Convert theta to string
-            theta_str = str(theta)
-            # Replace 'θ' with LaTeX '\theta'
-            theta_str = theta_str.replace('θ', '\\theta')
-            # Enclose subscripts in braces and replace underscores with commas
-            # e.g., '\theta_0_0' -> '\theta_{0,0}'
-            match = re.match(r'(\\theta)_(.+)', theta_str)
-            if match:
-                base = match.group(1)
-                subscripts = match.group(2).split('_')
-                subscripts_str = ','.join(subscripts)
-                theta_str = f"{base}_{{{subscripts_str}}}"
-            # Ensure parentheses are properly closed
-            qpic_lines.append(f"q{qubit_indices[0]} {gate_name.upper()}({theta_str})")
-        elif gate_name == "measure":
-            # Measurement gate
-            qpic_lines.append(f"q{qubit_indices[0]} M")
+        # Determine current gate type
+        current_gate_type = "rotation" if gate_name in ["rx", "ry", "rz", "x", "h"] else "entanglement"
+
+        # Check for measurement operations
+        if gate_name == "measure":
+            qubit_index = qubit_indices[0]
+            classical_bit_index = clbits[0].index
+            measurements[qubit_index] = classical_bit_index
+            qpic_lines.append(f"q{qubit_index} M c{classical_bit_index}")
+
+        # Handle gate blocks based on type
         else:
-            # Other gates
-            qpic_lines.append(f"q{qubit_indices[0]} {gate_name.upper()}")
+            # Check if we need to close the previous block
+            if current_gate_type != last_gate_type:
+                if last_gate_type is not None:
+                    close_block()
+                start_block(current_gate_type)
+                last_gate_type = current_gate_type
 
-    # Join all lines into a single string
-    qpic_str = '\n'.join(qpic_lines)
+            # Add gates to the block
+            if gate_name == "h":
+                qpic_lines.append(f"q{qubit_indices[0]} H")
+            elif gate_name == "x":
+                qpic_lines.append(f"q{qubit_indices[0]} X")
+            elif gate_name == "cx":
+                control, target = qubit_indices
+                qpic_lines.append(f"q{target} X q{control}")
+            elif gate_name == "cz":
+                control, target = qubit_indices
+                qpic_lines.append(f"q{target} Z q{control}")
+            elif gate_name in ["rx", "ry", "rz"]:
+                theta = instruction.params[0]
+                indeces = f"{str(theta)[2]}{str(theta)[4]}"
+                label = f"{gate_name.upper()}(\\theta{indeces})"
+                qpic_lines.append(f"q{qubit_indices[0]} G {label} width=40")
+            elif gate_name in ["crx", "crz"]:
+                control, target = qubit_indices
+                theta = instruction.params[0]
+                indeces = f"{str(theta)[2]}{str(theta)[4]}"
+                label = f"{gate_name.upper()}(\\theta{indeces})"
+                qpic_lines.append(f"q{target} G {label} q{control} width=50")
+            else:
+                qpic_lines.append(f"q{qubit_indices[0]} {gate_name.upper()}")
 
-    return qpic_str
+    # Close any open block at the end
+    close_block()
+
+    return '\n'.join(qpic_lines)
 

@@ -6,13 +6,17 @@ num_seeds: 1
 
 max_cut:
   graph_type: random  # Options: random, fully_connected, n-regular.yaml
-  nodes: 10
+  nodes: 8
   connectivity: 0.8
   max_weight: 10
 
 vqe_parameters:
-  ansatz_layers: 1
-  entangle_ratio: 1.0
   ansatz_type: HEA  # Options: RealAmplitudes, EfficientSU2, HEA
+  ansatz_layers: 1
   plot_ansatz: False
+
+  entangle_method: 'dropout' # Options: dropout, parametrize
+  entangle_ratio: 0.5
+  param_theta: np.pi/2
+
   optimizer: COBYLA            # Options: COBYLA, SPSA, NELDER_MEAD

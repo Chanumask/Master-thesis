@@ -1,23 +1,14 @@
-import os
-import subprocess
-
 import networkx as nx
 import numpy as np
 import itertools
 
-from qiskit import QuantumCircuit
-from qiskit.circuit.library import RealAmplitudes, EfficientSU2
-from qiskit.primitives import Estimator
-from qiskit_algorithms.minimum_eigensolvers import VQE
-from qiskit_algorithms.optimizers import COBYLA, SPSA, NELDER_MEAD
+
 from qiskit_optimization.applications import Maxcut
 
-from eval import get_solution, calculate_entanglement_metrics, calculate_cut_cost
+from eval import get_solution, calculate_entanglement_metrics, calculate_cut_cost, calculate_expressibility
 from util import Result
-from vqe import add_cyclic_entanglement, create_hea
-from util import generate_qpic_circuit
+from vqe import create_vqe, vqe_callback
 
-global_energy_history = []
 
 
 def brute_force_max_cut(graph):
@@ -49,13 +40,16 @@ def run_vqe_for_max_cut(g, config, seed):
 
     ansatz, vqe = create_vqe(config, qubits)
 
+    # pre-training metrics
+    expressibility_score = calculate_expressibility(ansatz) # in die andere rein moven?
     vqe.callback = vqe_callback
 
     result = vqe.compute_minimum_eigenvalue(hamiltonian)
     optimized_ansatz = ansatz.assign_parameters(result.optimal_parameters)
 
     entanglement_metrics = calculate_entanglement_metrics(optimized_ansatz)
-    # print(entanglement_metrics)
+    entanglement_metrics['expressibility'] = expressibility_score
+    print(entanglement_metrics)
     distribution, solution = get_solution(optimized_ansatz)
     bitstring_solution = solution[0]  # the most probable solution
     cut_cost = calculate_cut_cost(g, bitstring_solution)  # Calculate the cut cost based on the solution
@@ -85,72 +79,6 @@ def get_hamiltonian(nxgraph):
     quadratic = maxcut.to_quadratic_program()
     return quadratic.to_ising()
 
-
-def create_vqe(config, qubits):
-    entangle_ratio = config['vqe_parameters']['entangle_ratio']
-    ansatz_depth = config['vqe_parameters']['ansatz_layers']
-    ansatz_type = config['vqe_parameters'].get('ansatz_type', 'RealAmplitudes')
-    plot_ansatz = config['vqe_parameters']['plot_ansatz']
-    optimizer_choice = config['vqe_parameters'].get('optimizer', 'COBYLA')
-
-    # Ansatz selection
-    if ansatz_type == 'RealAmplitudes':
-        ansatz = RealAmplitudes(num_qubits=qubits, reps=ansatz_depth)
-    elif ansatz_type == 'EfficientSU2':
-        ansatz = EfficientSU2(num_qubits=qubits, reps=ansatz_depth)
-    elif ansatz_type == 'HEA':
-        ansatz = create_hea(qubits, ansatz_depth)
-    else:
-        raise ValueError(f"Unsupported ansatz type: {ansatz_type}")
-
-    if plot_ansatz:
-        qpic_str = generate_qpic_circuit(ansatz)
-        print(qpic_str)
-        with open('circuit.qpic', 'w', encoding='utf-8') as file:
-            file.write(qpic_str)
-            quit()
-        # output_file = "circuit.png"
-        # try:
-        #     # Run qpic to generate a PNG
-        #     subprocess.run(["qpic", "-f", "png", qpic_file], check=True)
-        #
-        #     from PIL import Image
-        #     img = Image.open(output_file)
-        #     img.show()
-        #
-        # except subprocess.CalledProcessError as e:
-        #     print(f"Error generating the circuit image: {e}")
-        # finally:
-        #     os.remove(qpic_file)
-
-    # Add Entanglement or introduce dropout
-    full_circuit = QuantumCircuit(qubits)
-    # full_circuit, n_entanglements = add_cyclic_entanglement(full_circuit, entangle_ratio)
-    full_circuit.compose(ansatz, inplace=True)
-    # print(full_circuit.decompose().draw())
-
-    estimator = Estimator()
-
-    # Select the optimizer
-    if optimizer_choice == 'COBYLA':
-        optimizer = COBYLA()
-    elif optimizer_choice == 'SPSA':
-        optimizer = SPSA()
-    elif optimizer_choice == 'NELDER_MEAD':
-        optimizer = NELDER_MEAD()
-    else:
-        raise ValueError(f"Unsupported optimizer: {optimizer_choice}")
-
-    vqe = VQE(estimator, full_circuit, optimizer)
-
-    return ansatz, vqe
-
-
-def vqe_callback(eval_count, params, energy, metadata):
-    """Callback function to store the energy at each iteration.""" 
-    global global_energy_history
-    if eval_count % 10 == 0:    # only save every 10th value
-        global_energy_history.append(float(round(energy,4)))
 
 ##################
 

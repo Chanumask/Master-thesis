@@ -1,17 +1,21 @@
 problem_class: max_cut
-iterations: 2 # how many runs using the same seed
+iterations: 5 # how many runs using the same seed
 filepath: "results/results_fully_connected.csv"
 base_seed: 42
 num_seeds: 1
 
 max_cut:
   graph_type: fully_connected
-  nodes: 10
+  nodes: 8
   max_weight: 10
 
 vqe_parameters:
+  ansatz_type: HEA  # Options: RealAmplitudes, EfficientSU2, HEA, Test
   ansatz_layers: 1  # [1,3,5]
-  entangle_ratio: 1.0
-  ansatz_type: HEA  # Options: RealAmplitudes, EfficientSU2, HEA
-  plot_ansatz: False
+  plot_ansatz: True
+
+  entangle_method: 'dropout' # Options: dropout, parametrize
+  entangle_ratio: 0.5
+  param_theta: np.pi/2
+
   optimizer: COBYLA            # Options: COBYLA, SPSA, NELDER_MEAD

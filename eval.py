@@ -2,9 +2,11 @@ import numpy as np
 from qiskit import transpile
 from qiskit.primitives import Sampler
 from qiskit_aer import AerSimulator, StatevectorSimulator, Aer
-from qiskit.quantum_info import DensityMatrix, partial_trace, entropy, concurrence, purity
+from qiskit.quantum_info import DensityMatrix, partial_trace, entropy, concurrence, purity, state_fidelity
 from qiskit import QuantumCircuit
 
+from scipy.stats import entropy
+from qiskit.circuit import ParameterVector
 
 def run_circuit(circuit):
     simulator = AerSimulator()
@@ -56,8 +58,14 @@ def calculate_entanglement_metrics(optimized_circuit: QuantumCircuit):
     metrics = {}
     num_qubits = optimized_circuit.num_qubits
 
+    probabilities = np.diag(rho.data).real
+
+    # Check if it's a valid probability distribution (i.e., sums to 1)
+    if not np.isclose(np.sum(probabilities), 1):
+        raise ValueError("Invalid probability distribution")
+
     # 1. Entanglement Entropy
-    metrics['entanglement_entropy'] = entropy(rho)
+    metrics['entanglement_entropy'] = entropy(probabilities)
 
     # 2. Concurrence for the first two qubits
     if num_qubits >= 2:
@@ -75,16 +83,16 @@ def calculate_entanglement_metrics(optimized_circuit: QuantumCircuit):
     for i in range(num_qubits):
         # Partial trace over the other qubits to get the reduced density matrix for qubit i
         partial_rho = partial_trace(rho, [j for j in range(num_qubits) if j != i])
+        partial_probabilities = np.diag(partial_rho.data).real
+
         # Calculate the von Neumann entropy for qubit i
-        entropies.append(entropy(partial_rho))
+        entropies.append(entropy(partial_probabilities))
 
     average_entanglement_per_qubit = np.mean(entropies)
-    # print(average_entanglement_per_qubit)
     metrics['e_per_qubit'] = average_entanglement_per_qubit
 
     # 5 averaged Meyer-Wallach entanglement measure  http://arxiv.org/abs/1905.10876
     mw = mw_measure(optimized_circuit, num_qubits)
-    # print(mw)
     metrics['meyer_wallach'] = mw
 
     return metrics
@@ -117,3 +125,53 @@ def mw_measure(circuit, num_qubits, sample=1024):
     Q = 2 * np.sum(temp).real / sample
 
     return Q
+
+
+def calculate_expressibility(ansatz:QuantumCircuit, num_samples=100, num_qubits=4, num_fidelity_bins=50):
+    """
+    Calculate the expressibility of a given ansatz by comparing the fidelity distribution
+    to the Haar distribution.
+
+    Args:
+        ansatz (QuantumCircuit): Parameterized quantum circuit representing the ansatz.
+        num_samples (int): Number of random parameter sets to sample.
+        num_qubits (int): Number of qubits in the circuit.
+        num_fidelity_bins (int): Number of bins for the fidelity histogram.
+
+    Returns:
+        float: KL divergence representing the expressibility of the ansatz.
+    """
+    if ansatz.num_parameters == 0:
+        raise ValueError("Ansatz has no parameters to bind for expressibility calculation.")
+
+    # Generate random parameter sets
+    parameters = ParameterVector('theta', ansatz.num_parameters)
+    fidelities = []
+
+    for _ in range(num_samples):
+        # Generate two random parameter sets
+        param_values_1 = 2 * np.pi * np.random.rand(len(parameters))
+        param_values_2 = 2 * np.pi * np.random.rand(len(parameters))
+
+        # Bind parameters to create two different instances of the ansatz
+        circ1 = ansatz.assign_parameters(param_values_1)
+        circ2 = ansatz.assign_parameters(param_values_2)
+
+        # Get statevectors using simulate_statevector
+        statevector1 = simulate_statevector(circ1)
+        statevector2 = simulate_statevector(circ2)
+
+        # Calculate the fidelity between the two statevectors
+        fidelity = state_fidelity(statevector1, statevector2)
+        fidelities.append(fidelity)
+
+    # Create a normalized histogram of fidelities
+    hist, _ = np.histogram(fidelities, bins=num_fidelity_bins, range=(0, 1), density=True)
+    hist = hist / np.sum(hist)
+
+    # Approximate Haar distribution (uniform for simplicity)
+    haar_dist = np.ones(num_fidelity_bins) / num_fidelity_bins
+
+    # Calculate KL divergence as the expressibility metric
+    kl_divergence = entropy(hist, haar_dist)
+    return kl_divergence
