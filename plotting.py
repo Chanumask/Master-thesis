@@ -99,7 +99,6 @@ def plot_average_metrics(metrics_df, parameter_column, experiment_folder):
         save_path = os.path.join(experiment_folder, f"{metric}_vs_{parameter_column}.png")
         plt.savefig(save_path)
         plt.close()
-        print(f"Saved plot to {save_path}")
 
 
 def plot_approximation_vs_entanglement(metrics_df, experiment_folder):
@@ -120,7 +119,6 @@ def plot_approximation_vs_entanglement(metrics_df, experiment_folder):
         save_path = os.path.join(experiment_folder, f"approximation_vs_{metric}.png")
         plt.savefig(save_path)
         plt.close()
-        print(f"Saved plot to {save_path}")
 
 
 def plot_energy_history_from_csv(filepath, out_path):
@@ -159,7 +157,6 @@ def save_plots(all_data, metrics_to_plot, resultpath):
     for metric in metrics_to_plot:
         metric_data = all_data[metric]
         if any(d is not None for d in metric_data):
-            print("Plotted metric:", metric)
             plt.figure(figsize=(10, 6))
             plt.plot(metric_data, label=metric)
             plt.title(f"{metric} across experiments")
