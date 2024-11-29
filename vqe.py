@@ -16,14 +16,16 @@ def create_hea(num_qubits, depth):
     circuit = QuantumCircuit(num_qubits)
 
     # Create parameter objects for each rotation angle
-    theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(2 * (depth + 1))]
+    # theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(2 * (depth + 1))]
+    theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(2 * depth)]
 
     # Loop over depth and apply RY, RZ gates with parameterized angle (2 params per qubit per layer)
     for d in range(depth):
         for i in range(num_qubits):
             theta_ry = theta_list[2 * i + 2 * num_qubits * d]
-            theta_rz = theta_list[2 * i + 1 + 2 * num_qubits * d]
             circuit.ry(theta_ry, i)
+        for i in range(num_qubits):
+            theta_rz = theta_list[2 * i + 1 + 2 * num_qubits * d]
             circuit.rz(theta_rz, i)
 
         # Apply circular CZ entanglement
@@ -31,18 +33,20 @@ def create_hea(num_qubits, depth):
             circuit.cz(i, i + 1)
         circuit.cz(num_qubits - 1, 0)
 
-    # Apply final RY, RZ gates with parameterized angles
-    for i in range(num_qubits):
-        theta_ry = theta_list[2 * i + 2 * num_qubits * depth]
-        theta_rz = theta_list[2 * i + 1 + 2 * num_qubits * depth]
-        circuit.ry(theta_ry, i)
-        circuit.rz(theta_rz, i)
+    # Apply final RY, RZ gates with parameterized angles ?
+    # for i in range(num_qubits):
+    #     theta_ry = theta_list[2 * i + 2 * num_qubits * depth]
+    #     theta_rz = theta_list[2 * i + 1 + 2 * num_qubits * depth]
+    #     circuit.ry(theta_ry, i)
+    #     circuit.rz(theta_rz, i)
+
+    random_params = np.random.uniform(-0.001, 0.001, len(theta_list))
+    circuit.assign_parameters(random_params)
 
     return circuit
 
 
-def create_simple_ansatz(num_qubits, depth=2):
-    print("simple")
+def create_test_ansatz(num_qubits, depth=2):
     circuit = QuantumCircuit(num_qubits)
 
     # Create parameters
@@ -62,13 +66,13 @@ def create_simple_ansatz(num_qubits, depth=2):
     return circuit
 
 
-def create_vqe(config, qubits):
+def create_vqe(config, qubits, energy_history, num_iteration):
     ansatz_depth = config['vqe_parameters']['ansatz_layers']
     ansatz_type = config['vqe_parameters'].get('ansatz_type', 'RealAmplitudes')
     plot_ansatz = config['vqe_parameters']['plot_ansatz']
 
     entangle_method = config['vqe_parameters'].get('entangle_method', 'dropout')
-    entangle_ratio = config['vqe_parameters']['entangle_ratio']
+    dropout_ratio = config['vqe_parameters']['dropout_ratio']
     param_theta = config['vqe_parameters'].get('param_theta', np.pi / 2)  # Default parameter for parametric entangling
 
     optimizer_choice = config['vqe_parameters'].get('optimizer', 'COBYLA')
@@ -81,28 +85,25 @@ def create_vqe(config, qubits):
     elif ansatz_type == 'HEA':
         ansatz = create_hea(qubits, ansatz_depth)
     elif ansatz_type == 'Test':
-        ansatz = create_simple_ansatz(qubits)
+        ansatz = create_test_ansatz(qubits)
     else:
         raise ValueError(f"Unsupported ansatz type: {ansatz_type}")
 
-    # Add Entanglement or introduce dropout
-    full_circuit = QuantumCircuit(qubits)
-    # full_circuit, n_entanglements = add_cyclic_entanglement(full_circuit, entangle_ratio)
-    full_circuit.compose(ansatz, inplace=True)
-    # print(full_circuit.decompose().draw())
-
     # Entanglement customization
     if entangle_method == 'dropout':
-        ansatz = apply_dropout(ansatz, entangle_ratio)
+        ansatz = apply_dropout(ansatz, dropout_ratio)
     elif entangle_method == 'parametrize':
         ansatz = apply_parametric_entangling(ansatz, param_theta)  # Apply parameterized CZ with theta
+    elif entangle_method == 'none':
+        pass
     else:
         raise ValueError(f"Unsupported entangle method: {entangle_method}")
-
-    if plot_ansatz:
+    if plot_ansatz and num_iteration ==0:
         qpic_str = generate_qpic_circuit(ansatz)
         with open('circuit.qpic', 'w', encoding='utf-8') as file:
             file.write(qpic_str)
+        print("generated qpic file for ansatz")
+
     estimator = Estimator()
 
     # Select the optimizer
@@ -115,16 +116,13 @@ def create_vqe(config, qubits):
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer_choice}")
 
-    vqe = VQE(estimator, full_circuit, optimizer)
+    def vqe_callback(eval_count, params, energy, metadata):
+        if eval_count % 10 == 0:
+            energy_history.append(float(round(energy, 4)))
+
+    vqe = VQE(estimator, ansatz, optimizer, callback=vqe_callback)
 
     return ansatz, vqe
-
-
-def vqe_callback(eval_count, params, energy, metadata):
-    """Callback function to store the energy at each iteration."""
-    global global_energy_history
-    if eval_count % 10 == 0:  # only save every 10th value
-        global_energy_history.append(float(round(energy, 4)))
 
 
 def apply_dropout(circuit, dropout_rate):
@@ -169,7 +167,7 @@ def apply_parametric_entangling(circuit, theta_value):
     for instruction, qubits, clbits in circuit.data:
         if instruction.name == 'cz':
             modified_circuit.crz(theta_value, qubits[0]._index, qubits[1]._index)
-        elif instruction.name =='cx':
+        elif instruction.name == 'cx':
             modified_circuit.crx(theta_value, qubits[0]._index, qubits[1]._index)
         else:
             modified_circuit.append(instruction, [q._index for q in qubits])
@@ -177,10 +175,10 @@ def apply_parametric_entangling(circuit, theta_value):
     return modified_circuit
 
 
-def add_cyclic_entanglement(circuit, entangle_ratio):
+def add_cyclic_entanglement(circuit, dropout_ratio):
     """Add cyclic entanglement using CX gates at the beginning of the circuit."""
     num_qubits = circuit.num_qubits
-    num_entanglements = int(entangle_ratio * num_qubits)
+    num_entanglements = int(dropout_ratio * num_qubits)
 
     # Randomly select pairs to entangle from a cyclic list
     all_pairs = [(i, (i + 1) % num_qubits) for i in range(num_qubits)]

@@ -13,6 +13,52 @@ def generate_deterministic_seeds(base_seed, num_seeds):
     return [rng.integers(0, 10000) for _ in range(num_seeds)]
 
 
+def setup_results_directory(base_dir="results/"):
+    """
+    Create a results directory for the current run and return its path.
+    Returns the path to the directory for the current run.
+    """
+    os.makedirs(base_dir, exist_ok=True)
+
+    # Determine the next available Run_index folder
+    existing_runs = [
+        int(folder.replace("Run_", "")) for folder in os.listdir(base_dir)
+        if folder.startswith("Run_") and folder.replace("Run_", "").isdigit()
+    ]
+    next_index = max(existing_runs) + 1 if existing_runs else 1
+    run_folder = os.path.join(base_dir, f"Run_{next_index}")
+    os.makedirs(run_folder, exist_ok=True)
+
+    return run_folder
+
+
+def create_experiment_folder(base_dir="results"):
+    """
+    Create a new experiment folder in the result directory.
+    Returns the path of the created experiment folder.
+    """
+    # Determine the next available Experiment_<index> folder
+    existing_experiments = [int(folder.replace("Experiment_", "")) for folder in os.listdir(base_dir)
+                            if folder.startswith("Experiment_") and folder.replace("Experiment_", "").isdigit()]
+    next_experiment_index = max(existing_experiments) + 1 if existing_experiments else 1
+    experiment_folder = os.path.join(base_dir, f"Experiment_{next_experiment_index}")
+    os.makedirs(experiment_folder, exist_ok=True)
+    return experiment_folder
+
+
+def create_run_folder(experiment_folder):
+    """
+    Create a new run folder inside the given experiment folder.
+    Returns the path of the created run folder.
+    """
+    existing_runs = [int(folder.replace("Run_", "")) for folder in os.listdir(experiment_folder)
+                     if folder.startswith("Run_") and folder.replace("Run_", "").isdigit()]
+    next_run_index = max(existing_runs) + 1 if existing_runs else 1
+    run_folder = os.path.join(experiment_folder, f"Run_{next_run_index}")
+    os.makedirs(run_folder, exist_ok=True)
+    return run_folder
+
+
 @dataclass
 class Result:
     seed: int
@@ -163,4 +209,3 @@ def generate_qpic_circuit(circuit, scale_factor=1.0):
     close_block()
 
     return '\n'.join(qpic_lines)
-

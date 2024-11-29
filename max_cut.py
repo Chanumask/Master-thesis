@@ -2,13 +2,11 @@ import networkx as nx
 import numpy as np
 import itertools
 
-
 from qiskit_optimization.applications import Maxcut
 
-from eval import get_solution, calculate_entanglement_metrics, calculate_cut_cost, calculate_expressibility
+from eval import calculate_cut_cost, calculate_expressibility, get_probabilities, calculate_entanglement_metrics
 from util import Result
-from vqe import create_vqe, vqe_callback
-
+from vqe import create_vqe
 
 
 def brute_force_max_cut(graph):
@@ -30,36 +28,40 @@ def brute_force_max_cut(graph):
     return max_cut_value
 
 
-def run_vqe_for_max_cut(g, config, seed):
+def run_vqe_for_max_cut(g, config, seed, num_iteration):
     """Solve the MaxCut problem on a given NetworkX graph using VQE."""
-    global global_energy_history
-    global_energy_history = []
+    # print("Starting VQE optimization for MAX-CUT problem")
 
     qubits = g.number_of_nodes()
     hamiltonian, offset = get_hamiltonian(g)
 
-    ansatz, vqe = create_vqe(config, qubits)
+    global_energy_history = []
+    ansatz, vqe = create_vqe(config, qubits, global_energy_history, num_iteration)
 
     # pre-training metrics
-    expressibility_score = calculate_expressibility(ansatz) # in die andere rein moven?
-    vqe.callback = vqe_callback
+    # expressibility_score = calculate_expressibility(ansatz)  # in die andere rein moven?
 
-    result = vqe.compute_minimum_eigenvalue(hamiltonian)
-    optimized_ansatz = ansatz.assign_parameters(result.optimal_parameters)
+    # Run optimization
+    vqe_result = vqe.compute_minimum_eigenvalue(hamiltonian)
+    optimized_ansatz = ansatz.assign_parameters(vqe_result.optimal_parameters)
 
-    entanglement_metrics = calculate_entanglement_metrics(optimized_ansatz)
-    entanglement_metrics['expressibility'] = expressibility_score
-    print(entanglement_metrics)
-    distribution, solution = get_solution(optimized_ansatz)
-    bitstring_solution = solution[0]  # the most probable solution
-    cut_cost = calculate_cut_cost(g, bitstring_solution)  # Calculate the cut cost based on the solution
+    # print("Optimization completed, starting evaluation")
+
+    probabilities = get_probabilities(optimized_ansatz)
+
+    entanglement_metrics = calculate_entanglement_metrics(optimized_ansatz, probabilities)
+    # entanglement_metrics['expressibility'] = expressibility_score
+
+    solution = max(probabilities.items(), key=lambda x: x[1])
+    bitstring_solution = solution[0]
+    cut_cost = calculate_cut_cost(g, bitstring_solution)
     optimal_cut_value = brute_force_max_cut(g)
 
     # Log results to CSV
     result = Result(
         graph_edges=list(g.edges()),
-        optimal_value=result.optimal_value,
-        distribution=distribution,
+        optimal_value=vqe_result.optimal_value,
+        distribution=probabilities,
         solution=solution,
         cut_cost=cut_cost,
         brute_forced_cost=optimal_cut_value,
