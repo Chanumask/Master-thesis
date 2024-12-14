@@ -1,6 +1,7 @@
 import csv
 import os
 
+import seaborn as sns
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -49,14 +50,24 @@ def read_all_runs(config_name, experiment_ids):
         raise ValueError("No valid CSV files found for the given experiment IDs.")
 
 
-def extract_metrics(data_frame, parameter_column):
-    """Extract entanglement metrics and ansatz_layers from the DataFrame.
-    parameter_column (str): Name of the column with the varying parameter (e.g., 'dropout_ratio', 'param_theta')."""
+def extract_metrics(data_frame):
+    """Extract entanglement metrics and ansatz_layers from the DataFrame."""
     metrics_list = []
     for _, row in data_frame.iterrows():
         metrics_str = row['entanglement_metrics']
-        parameter_value = row[parameter_column]
+        ansatz_type = row.get('ansatz_type', None)
+        dropout_ratio = row.get('dropout_ratio', None)
+        ansatz_layers = row.get('ansatz_layers', None)
+        param_theta = row.get('param_theta', None)
         approximation_ratio = row.get('approximation_ratio', None)
+
+        # Safely evaluate param_theta if it's a string expression
+        if isinstance(param_theta, str):
+            try:
+                param_theta = eval(param_theta, {"np": np})
+            except Exception as e:
+                print(f"Error evaluating param_theta: {e}")
+                param_theta = None
 
         safe_metrics_str = metrics_str.replace('np.float64', '').replace('(', '').replace(')', '')
         safe_metrics_str = safe_metrics_str.replace('{\'', '{"').replace('\':', '":').replace(', \'', ', "')
@@ -71,13 +82,17 @@ def extract_metrics(data_frame, parameter_column):
             meyer_wallach_value = None
 
         metrics_list.append({
-            parameter_column: parameter_value,
+            'ansatz_type': ansatz_type,
+            'ansatz_layers': ansatz_layers,
+            'dropout_ratio': dropout_ratio,
+            'param_theta': param_theta,  # Now numeric if evaluable
             'e_per_qubit': e_per_qubit_value,
             'meyer_wallach': meyer_wallach_value,
             'approximation_ratio': approximation_ratio
         })
     metrics_df = pd.DataFrame(metrics_list)
     return metrics_df
+
 
 
 def plot_average_metrics(metrics_df, parameter_column, experiment_folder):
@@ -148,6 +163,7 @@ def plot_energy_history_from_csv(filepath, out_path):
         plt.legend(title='Runs')
         plt.grid(True)
         plt.savefig(f"{out_path}/energy_history_plot.png", format='png')
+        plt.close()
 
 
 def save_plots(all_data, metrics_to_plot, resultpath):
@@ -190,3 +206,41 @@ def plot_metrics_across_run_from_csv(csvpath, results_folder):
                 all_data[metric].append(None)  # handle missing values
 
     save_plots(all_data, metrics_to_plot, results_folder)
+
+
+def plot_metrics_with_grouping(metrics_df, parameter_column, group_column, metrics_to_plot, experiment_folder):
+    """
+    Plot average entanglement metrics vs. ansatz_layers with different colors for each dropout value and save the plot.
+    Args:
+        metrics_df (pd.DataFrame): DataFrame with metrics data.
+        parameter_column (str): The column name for the x-axis (e.g., 'ansatz_layers').
+        group_column (str): The column to group by for color coding (e.g., 'dropout_ratio').
+        experiment_folder (str): Path to the experiment folder where the plot will be saved.
+        metrics_to_plot (list): list of metrics to generate plots for on the vertical axis
+    """
+    # Group the data by the parameter column and group column
+    print(metrics_df.columns)
+    grouped_metrics = metrics_df.groupby([parameter_column, group_column]).mean().reset_index()
+
+    for metric in metrics_to_plot:
+        plt.figure(figsize=(10, 6))
+        # Use seaborn for easy color handling
+        sns.lineplot(
+            data=grouped_metrics,
+            x=parameter_column,
+            y=metric,
+            hue=group_column,
+            marker="o",
+            palette="tab10"
+        )
+        plt.title(f"Average {metric} vs. {parameter_column} (Grouped by {group_column})")
+        plt.xlabel(f"{parameter_column.replace('_', ' ').title()}")
+        plt.ylabel(f"Average {metric}")
+        plt.legend(title=group_column.replace('_', ' ').title())
+        plt.grid(True)
+
+        # Save the plot to the experiment folder
+        save_path = os.path.join(experiment_folder, f"{metric}_vs_{parameter_column}_by_{group_column}.png")
+        plt.savefig(save_path)
+        plt.close()
+        print(f"Saved plot to {save_path}")

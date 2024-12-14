@@ -1,17 +1,14 @@
 import os
+from itertools import product
 
 import numpy as np
 
 from max_cut import generate_graph_from_config, run_vqe_for_max_cut
 from plotting import plot_metrics_across_run_from_csv, plot_energy_history_from_csv, read_all_runs, extract_metrics, \
-    plot_average_metrics, plot_approximation_vs_entanglement
-from util import load_config, log_vqe_results, generate_deterministic_seeds, setup_results_directory, create_run_folder, \
+    plot_metrics_with_grouping
+from util import load_config, log_vqe_results, generate_deterministic_seeds, create_run_folder, \
     create_experiment_folder
 
-from itertools import product
-
-
-from itertools import product
 
 def run_experiment(problem_name, config_file_name, logging, plotting):
     """
@@ -93,12 +90,20 @@ if __name__ == '__main__':
     problem_type = "max_cut"
     config_name = "fully_connected"
     experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=True)
+    # experiment_path = "results/Experiment_7"
 
+    parameter_column = ['ansatz_layers','dropout_ratio']  # ansatz_layers, dropout_ratio, param_theta
 
-    parameter_column = 'ansatz_layers'
-    experiment_ids = [5]  # Experiment ID(s)
+    combined_df = read_all_runs(config_name, experiment_ids = [8])
+    metrics_df = extract_metrics(combined_df)
+    # plot_average_metrics(metrics_df, parameter_column, experiment_path)
+    # plot_approximation_vs_entanglement(metrics_df, experiment_path)
+    # plot_metrics_with_dropout(metrics_df, parameter_column='ansatz_layers', group_column='dropout_ratio', experiment_folder=experiment_path)
 
-    combined_df = read_all_runs(config_name, experiment_ids)
-    metrics_df = extract_metrics(combined_df, parameter_column)
-    plot_average_metrics(metrics_df, parameter_column, experiment_path)
-    plot_approximation_vs_entanglement(metrics_df, experiment_path)
+    plot_metrics_with_grouping(
+        metrics_df=metrics_df,
+        parameter_column='ansatz_layers',
+        group_column='ansatz_type',  # Grouping by ansatz type
+        metrics_to_plot=['e_per_qubit', 'meyer_wallach', 'approximation_ratio'],
+        experiment_folder=experiment_path
+    )

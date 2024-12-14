@@ -3,7 +3,6 @@ from qiskit import QuantumCircuit
 from qiskit.circuit import Parameter
 
 from qiskit_algorithms.minimum_eigensolvers import VQE
-from qiskit.circuit.library import RealAmplitudes, EfficientSU2
 from qiskit.primitives import Estimator
 from qiskit_algorithms.optimizers import COBYLA, SPSA, NELDER_MEAD
 
@@ -12,33 +11,61 @@ from util import generate_qpic_circuit
 global_energy_history = []
 
 
-def create_hea(num_qubits, depth):
+def create_hea(num_qubits, depth, ansatz_id):
     circuit = QuantumCircuit(num_qubits)
 
-    # Create parameter objects for each rotation angle
-    # theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(2 * (depth + 1))]
-    theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(2 * depth)]
+    if ansatz_id == 1:
+        # Ansatz 1: typical HEA from many papers
+        theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(2 * depth)]
 
-    # Loop over depth and apply RY, RZ gates with parameterized angle (2 params per qubit per layer)
-    for d in range(depth):
-        for i in range(num_qubits):
-            theta_ry = theta_list[2 * i + 2 * num_qubits * d]
-            circuit.ry(theta_ry, i)
-        for i in range(num_qubits):
-            theta_rz = theta_list[2 * i + 1 + 2 * num_qubits * d]
-            circuit.rz(theta_rz, i)
+        for d in range(depth):
+            for i in range(num_qubits):
+                theta_ry = theta_list[2 * i + 2 * num_qubits * d]
+                circuit.ry(theta_ry, i)
+            for i in range(num_qubits):
+                theta_rz = theta_list[2 * i + 1 + 2 * num_qubits * d]
+                circuit.rz(theta_rz, i)
 
-        # Apply circular CZ entanglement
-        for i in range(num_qubits - 1):
-            circuit.cz(i, i + 1)
-        circuit.cz(num_qubits - 1, 0)
+            for i in range(num_qubits - 1):
+                circuit.cz(i, i + 1)
+            circuit.cz(num_qubits - 1, 0)
 
-    # Apply final RY, RZ gates with parameterized angles ?
-    # for i in range(num_qubits):
-    #     theta_ry = theta_list[2 * i + 2 * num_qubits * depth]
-    #     theta_rz = theta_list[2 * i + 1 + 2 * num_qubits * depth]
-    #     circuit.ry(theta_ry, i)
-    #     circuit.rz(theta_rz, i)
+    elif ansatz_id == 2:
+        # Ansatz 2: circuit 2 as shown in the image from sim expressibility
+        theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(2 * depth)]
+
+        for d in range(depth):
+            for i in range(num_qubits):
+                theta_rx = theta_list[2 * i + 2 * num_qubits * d]
+                circuit.rx(theta_rx, i)
+            for i in range(num_qubits):
+                theta_rz = theta_list[2 * i + 1 + 2 * num_qubits * d]
+                circuit.rz(theta_rz, i)
+
+            for i in range(num_qubits - 1):
+                circuit.cx(i, i + 1)
+            circuit.cx(num_qubits - 1, 0)
+
+    elif ansatz_id == 3:
+        # Ansatz 3: Circuit 15 as shown in sim expressibility
+        theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(depth)]
+
+        for d in range(depth):
+            for i in range(num_qubits):
+                theta_ry = theta_list[i + num_qubits * d]
+                circuit.ry(theta_ry, i)
+            if d % 2 == 0:
+                # Even layers: CNOT(i, i+1) for even i
+                for i in range(0, num_qubits - 1, 2):
+                    circuit.cx(i, i + 1)
+                circuit.cx(num_qubits - 1, 0)
+            else:
+                # Odd layers: CNOT(i, i+1) for odd i
+                for i in range(1, num_qubits - 1, 2):
+                    circuit.cx(i, i + 1)
+                circuit.cx(num_qubits - 1, 0)
+    else:
+        raise ValueError("Invalid ansatz_id. Supported ids are 1 and 2.")
 
     random_params = np.random.uniform(-0.001, 0.001, len(theta_list))
     circuit.assign_parameters(random_params)
@@ -78,12 +105,12 @@ def create_vqe(config, qubits, energy_history, num_iteration):
     optimizer_choice = config['vqe_parameters'].get('optimizer', 'COBYLA')
 
     # Ansatz selection
-    if ansatz_type == 'RealAmplitudes':
-        ansatz = RealAmplitudes(num_qubits=qubits, reps=ansatz_depth)
-    elif ansatz_type == 'EfficientSU2':
-        ansatz = EfficientSU2(num_qubits=qubits, reps=ansatz_depth)
-    elif ansatz_type == 'HEA':
-        ansatz = create_hea(qubits, ansatz_depth)
+    if ansatz_type.startswith('HEA'):
+        try:
+            ansatz_id = int(ansatz_type.split('_')[-1])
+            ansatz = create_hea(qubits, ansatz_depth, ansatz_id)
+        except (ValueError, IndexError):
+            raise ValueError(f"Invalid HEA ansatz type format: {ansatz_type}. Expected format: 'HEA_<int>'")
     elif ansatz_type == 'Test':
         ansatz = create_test_ansatz(qubits)
     else:

@@ -9,7 +9,7 @@ max_cut:
   degree: 3             # n edges at each node
 
 vqe_parameters:
-  ansatz_type: HEA  # Options: RealAmplitudes, EfficientSU2, HEA
+  ansatz_type: HEA_1  # Options: HEA
   ansatz_layers: [1,3,5,7,9]
   plot_ansatz: True
 
