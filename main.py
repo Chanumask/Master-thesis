@@ -89,7 +89,7 @@ def run_single_experiment(config, logging, plotting, run_folder):
 if __name__ == '__main__':
     problem_type = "max_cut"
     config_name = "fully_connected"
-    experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=True)
+    experiment_path = run_experiment(problem_type, config_name, logging=False, plotting=False)
     # experiment_path = "results/Experiment_7"
 
     parameter_column = ['ansatz_layers','dropout_ratio']  # ansatz_layers, dropout_ratio, param_theta

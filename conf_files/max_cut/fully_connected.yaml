@@ -1,5 +1,5 @@
 problem_class: max_cut
-iterations: 50 # how many runs using the same seed
+iterations: 1 # how many runs using the same seed
 base_seed: 42
 num_seeds: 1
 
@@ -9,9 +9,10 @@ max_cut:
   max_weight: 10
 
 vqe_parameters:
-  ansatz_type: [HEA_1, HEA_2, HEA_3]
-  ansatz_layers: [1,2,3,4,5,6,7]
+  ansatz_type: [HEA_2]
+  ansatz_layers: [1]
   plot_ansatz: True
+  ent_gate: 'cz'
 
   entangle_method: 'none' # Options: none, dropout, parametrize
   dropout_ratio: 0.2  # probability to remove cx/cz gates

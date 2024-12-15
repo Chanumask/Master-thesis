@@ -11,8 +11,16 @@ from util import generate_qpic_circuit
 global_energy_history = []
 
 
-def create_hea(num_qubits, depth, ansatz_id):
+def create_hea(num_qubits, depth, ansatz_id, ent_gate='cx'):
     circuit = QuantumCircuit(num_qubits)
+
+    def add_entangling_gate(circ, control, target):
+        if ent_gate == 'cx':
+            circ.cx(control, target)
+        elif ent_gate == 'cz':
+            circ.cz(control, target)
+        else:
+            raise ValueError("ent_gate must be 'cx' or 'cz'.")
 
     if ansatz_id == 1:
         # Ansatz 1: typical HEA from many papers
@@ -27,8 +35,8 @@ def create_hea(num_qubits, depth, ansatz_id):
                 circuit.rz(theta_rz, i)
 
             for i in range(num_qubits - 1):
-                circuit.cz(i, i + 1)
-            circuit.cz(num_qubits - 1, 0)
+                add_entangling_gate(circuit, i, i + 1)
+            add_entangling_gate(circuit, num_qubits - 1, 0)
 
     elif ansatz_id == 2:
         # Ansatz 2: circuit 2 as shown in the image from sim expressibility
@@ -43,8 +51,8 @@ def create_hea(num_qubits, depth, ansatz_id):
                 circuit.rz(theta_rz, i)
 
             for i in range(num_qubits - 1):
-                circuit.cx(i, i + 1)
-            circuit.cx(num_qubits - 1, 0)
+                add_entangling_gate(circuit, i, i + 1)
+            add_entangling_gate(circuit, num_qubits - 1, 0)
 
     elif ansatz_id == 3:
         # Ansatz 3: Circuit 15 as shown in sim expressibility
@@ -55,15 +63,15 @@ def create_hea(num_qubits, depth, ansatz_id):
                 theta_ry = theta_list[i + num_qubits * d]
                 circuit.ry(theta_ry, i)
             if d % 2 == 0:
-                # Even layers: CNOT(i, i+1) for even i
+                # Even layers
                 for i in range(0, num_qubits - 1, 2):
-                    circuit.cx(i, i + 1)
-                circuit.cx(num_qubits - 1, 0)
+                    add_entangling_gate(circuit, i, i + 1)
+                add_entangling_gate(circuit, num_qubits - 1, 0)
             else:
-                # Odd layers: CNOT(i, i+1) for odd i
+                # Odd layers
                 for i in range(1, num_qubits - 1, 2):
-                    circuit.cx(i, i + 1)
-                circuit.cx(num_qubits - 1, 0)
+                    add_entangling_gate(circuit, i, i + 1)
+                add_entangling_gate(circuit, num_qubits - 1, 0)
     else:
         raise ValueError("Invalid ansatz_id. Supported ids are 1 and 2.")
 
@@ -108,7 +116,7 @@ def create_vqe(config, qubits, energy_history, num_iteration):
     if ansatz_type.startswith('HEA'):
         try:
             ansatz_id = int(ansatz_type.split('_')[-1])
-            ansatz = create_hea(qubits, ansatz_depth, ansatz_id)
+            ansatz = create_hea(qubits, ansatz_depth, ansatz_id, config['vqe_parameters'].get('ent_gate', 'cx'))
         except (ValueError, IndexError):
             raise ValueError(f"Invalid HEA ansatz type format: {ansatz_type}. Expected format: 'HEA_<int>'")
     elif ansatz_type == 'Test':
