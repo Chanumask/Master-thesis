@@ -66,7 +66,6 @@ def create_hea(num_qubits, depth, ansatz_id, ent_gate='cx'):
                 # Even layers
                 for i in range(0, num_qubits - 1, 2):
                     add_entangling_gate(circuit, i, i + 1)
-                add_entangling_gate(circuit, num_qubits - 1, 0)
             else:
                 # Odd layers
                 for i in range(1, num_qubits - 1, 2):

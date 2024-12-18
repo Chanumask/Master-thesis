@@ -90,11 +90,11 @@ if __name__ == '__main__':
     problem_type = "max_cut"
     config_name = "fully_connected"
     experiment_path = run_experiment(problem_type, config_name, logging=False, plotting=False)
-    # experiment_path = "results/Experiment_7"
+    # experiment_path = "results/Experiment_9"
 
     parameter_column = ['ansatz_layers','dropout_ratio']  # ansatz_layers, dropout_ratio, param_theta
 
-    combined_df = read_all_runs(config_name, experiment_ids = [8])
+    combined_df = read_all_runs(config_name, experiment_ids = [9])
     metrics_df = extract_metrics(combined_df)
     # plot_average_metrics(metrics_df, parameter_column, experiment_path)
     # plot_approximation_vs_entanglement(metrics_df, experiment_path)
@@ -102,7 +102,7 @@ if __name__ == '__main__':
 
     plot_metrics_with_grouping(
         metrics_df=metrics_df,
-        parameter_column='ansatz_layers',
+        parameter_column='ent_gate',
         group_column='ansatz_type',  # Grouping by ansatz type
         metrics_to_plot=['e_per_qubit', 'meyer_wallach', 'approximation_ratio'],
         experiment_folder=experiment_path

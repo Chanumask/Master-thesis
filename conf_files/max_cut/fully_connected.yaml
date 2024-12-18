@@ -9,10 +9,10 @@ max_cut:
   max_weight: 10
 
 vqe_parameters:
-  ansatz_type: [HEA_2]
-  ansatz_layers: [1]
+  ansatz_type: [HEA_1]
+  ansatz_layers: [2]
   plot_ansatz: True
-  ent_gate: 'cz'
+  ent_gate: ['cx']
 
   entangle_method: 'none' # Options: none, dropout, parametrize
   dropout_ratio: 0.2  # probability to remove cx/cz gates

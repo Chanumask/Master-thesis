@@ -58,6 +58,7 @@ def extract_metrics(data_frame):
         ansatz_type = row.get('ansatz_type', None)
         dropout_ratio = row.get('dropout_ratio', None)
         ansatz_layers = row.get('ansatz_layers', None)
+        ent_gate = row.get('ent_gate', None)
         param_theta = row.get('param_theta', None)
         approximation_ratio = row.get('approximation_ratio', None)
 
@@ -84,6 +85,7 @@ def extract_metrics(data_frame):
         metrics_list.append({
             'ansatz_type': ansatz_type,
             'ansatz_layers': ansatz_layers,
+            'ent_gate': ent_gate,
             'dropout_ratio': dropout_ratio,
             'param_theta': param_theta,  # Now numeric if evaluable
             'e_per_qubit': e_per_qubit_value,
