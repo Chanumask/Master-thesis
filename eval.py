@@ -5,7 +5,12 @@ from qiskit_aer import AerSimulator, StatevectorSimulator
 from qiskit.quantum_info import DensityMatrix, partial_trace, entropy, concurrence, state_fidelity
 from qiskit import QuantumCircuit
 
+from qleet.analyzers.entanglement import EntanglementCapability
+from qleet.analyzers.expressibility import Expressibility
+from qleet.interface.circuit import CircuitDescriptor
+
 from scipy.stats import entropy as scipy_entropy
+
 
 def run_circuit(circuit):
     simulator = AerSimulator()
@@ -127,35 +132,6 @@ def calculate_entanglement_metrics(circuit, probabilities):
     return probabilities, metrics
 
 
-# def mw_measure(circuit, num_qubits, sample=1024):
-#     """
-#     Returns the meyer-wallach entanglement measure for the given circuit.
-#     """
-#
-#     temp = np.zeros(sample, dtype=complex)
-#     N = num_qubits
-#
-#     for i in range(sample):
-#         statevector = simulate_statevector(circuit)
-#         entropy_mw = 0
-#         qb_list = list(range(N))
-#
-#         # rho_k after tracing out the rest
-#         for j in range(N):
-#             rest = qb_list[:j] + qb_list[j + 1:]
-#             dens = partial_trace(statevector, rest).data
-#             trace = np.trace(np.matmul(dens, dens))  # rho_k^2
-#             entropy_mw += trace
-#
-#         entropy_mw /= N
-#         temp[i] = 1.0 - entropy_mw
-#
-#     # Meyer-Wallach measure
-#     Q = 2 * np.sum(temp).real / sample
-#
-#     return Q
-
-
 def calculate_expressibility(ansatz:QuantumCircuit, num_samples=100, num_qubits=4, num_fidelity_bins=50):
     """
     Calculate the expressibility of a given ansatz by comparing the fidelity distribution
@@ -205,3 +181,14 @@ def calculate_expressibility(ansatz:QuantumCircuit, num_samples=100, num_qubits=
     # Calculate KL divergence as the expressibility metric
     kl_divergence = scipy_entropy(hist, haar_dist)
     return kl_divergence
+
+
+def ent_cap(circuit: CircuitDescriptor, noise_model=None, samples=1000, measure="meyer-wallach", shots=1024):
+    entanglement_instance = EntanglementCapability(circuit=circuit, noise_model=noise_model, samples=samples)
+    entangling_capability = entanglement_instance.entanglement_capability(measure=measure, shots=shots)
+    return entangling_capability
+
+def expressibility(circuit: CircuitDescriptor, noise_model=None, samples=1000, measure="kld", shots=1024):
+    expressibility_instance = Expressibility(circuit=circuit, noise_model=noise_model, samples=samples)
+    expressibility_score  = expressibility_instance.expressibility(measure=measure, shots=shots)
+    return expressibility_score

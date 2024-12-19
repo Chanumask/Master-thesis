@@ -77,7 +77,7 @@ def create_hea(num_qubits, depth, ansatz_id, ent_gate='cx'):
     random_params = np.random.uniform(-0.001, 0.001, len(theta_list))
     circuit.assign_parameters(random_params)
 
-    return circuit
+    return circuit, random_params
 
 
 def create_test_ansatz(num_qubits, depth=2):
@@ -115,11 +115,9 @@ def create_vqe(config, qubits, energy_history, num_iteration):
     if ansatz_type.startswith('HEA'):
         try:
             ansatz_id = int(ansatz_type.split('_')[-1])
-            ansatz = create_hea(qubits, ansatz_depth, ansatz_id, config['vqe_parameters'].get('ent_gate', 'cx'))
+            ansatz, assigned_params = create_hea(qubits, ansatz_depth, ansatz_id, config['vqe_parameters'].get('ent_gate', 'cx'))
         except (ValueError, IndexError):
             raise ValueError(f"Invalid HEA ansatz type format: {ansatz_type}. Expected format: 'HEA_<int>'")
-    elif ansatz_type == 'Test':
-        ansatz = create_test_ansatz(qubits)
     else:
         raise ValueError(f"Unsupported ansatz type: {ansatz_type}")
 
@@ -132,6 +130,7 @@ def create_vqe(config, qubits, energy_history, num_iteration):
         pass
     else:
         raise ValueError(f"Unsupported entangle method: {entangle_method}")
+
     if plot_ansatz and num_iteration ==0:
         qpic_str = generate_qpic_circuit(ansatz)
         with open('circuit.qpic', 'w', encoding='utf-8') as file:
@@ -156,7 +155,7 @@ def create_vqe(config, qubits, energy_history, num_iteration):
 
     vqe = VQE(estimator, ansatz, optimizer, callback=vqe_callback)
 
-    return ansatz, vqe
+    return ansatz, assigned_params, vqe
 
 
 def apply_dropout(circuit, dropout_rate):
