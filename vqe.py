@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from qiskit import QuantumCircuit
 from qiskit.circuit import Parameter
 
@@ -75,8 +76,7 @@ def create_hea(num_qubits, depth, ansatz_id, ent_gate='cx'):
         raise ValueError("Invalid ansatz_id. Supported ids are 1 and 2.")
 
     random_params = np.random.uniform(-0.001, 0.001, len(theta_list))
-    circuit.assign_parameters(random_params)
-
+    # circuit = circuit.assign_parameters({param: value for param, value in zip(theta_list, random_params)})
     return circuit, random_params
 
 
@@ -102,7 +102,7 @@ def create_test_ansatz(num_qubits, depth=2):
 
 def create_vqe(config, qubits, energy_history, num_iteration):
     ansatz_depth = config['vqe_parameters']['ansatz_layers']
-    ansatz_type = config['vqe_parameters'].get('ansatz_type', 'RealAmplitudes')
+    ansatz_type = config['vqe_parameters']['ansatz_type']
     plot_ansatz = config['vqe_parameters']['plot_ansatz']
 
     entangle_method = config['vqe_parameters'].get('entangle_method', 'dropout')
@@ -133,9 +133,15 @@ def create_vqe(config, qubits, energy_history, num_iteration):
 
     if plot_ansatz and num_iteration ==0:
         qpic_str = generate_qpic_circuit(ansatz)
-        with open('circuit.qpic', 'w', encoding='utf-8') as file:
+        directory = "ansätze"
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        # Save the QPIC file in the "ansätze" directory
+        qpic_filename = f"{directory}/{ansatz_type}.qpic"
+        with open(qpic_filename, 'w', encoding='utf-8') as file:
             file.write(qpic_str)
-        print("generated qpic file for ansatz")
+        print(f"Generated QPIC file for ansatz: {qpic_filename}")
 
     estimator = Estimator()
 

@@ -1,18 +1,23 @@
 import numpy as np
+import os
 from qiskit import transpile
 from qiskit.primitives import Sampler
 from qiskit_aer import AerSimulator, StatevectorSimulator
-from qiskit.quantum_info import DensityMatrix, partial_trace, entropy, concurrence, state_fidelity
+from qiskit.quantum_info import DensityMatrix, partial_trace, entropy, concurrence
+from qiskit.quantum_info.analysis import hellinger_fidelity
 from qiskit import QuantumCircuit
 
-from qleet.analyzers.entanglement import EntanglementCapability
-from qleet.analyzers.expressibility import Expressibility
-from qleet.interface.circuit import CircuitDescriptor
-
+from qiskit.quantum_info import random_statevector
+from scipy.special import rel_entr
 from scipy.stats import entropy as scipy_entropy
-
+from matplotlib import pyplot as plt
 
 def run_circuit(circuit):
+    """Simulate the circuit and return the measurement counts."""
+    if circuit.num_clbits == 0:
+        # Add measurement gates if not present
+        circuit = circuit.copy()
+        circuit.measure_all()
     simulator = AerSimulator()
     simulator.set_options(seed_simulator=1)
     result = simulator.run(transpile(circuit, simulator), shots=1024).result()
@@ -129,66 +134,119 @@ def calculate_entanglement_metrics(circuit, probabilities):
         'meyer_wallach': meyer_wallach
     }
 
-    return probabilities, metrics
+    return metrics
 
+def ent_cap(circuit: QuantumCircuit, noise_model=None, samples=1000, measure="meyer-wallach", shots=1024):
+    """
+    Calculate entanglement capability of a circuit using the new EntanglementCapability class.
 
-def calculate_expressibility(ansatz:QuantumCircuit, num_samples=100, num_qubits=4, num_fidelity_bins=50):
+    Args:
+        circuit (QuantumCircuit): The quantum circuit.
+        noise_model (NoiseModel): Optional Qiskit noise model.
+        samples (int): Number of samples for the experiment.
+        measure (str): Measure for entanglement capability, e.g., "meyer-wallach".
+        shots (int): Number of shots.
+
+    Returns:
+        float: Entanglement capability score.
+    """
+    entanglement_instance = EntanglementCapability(circuit=circuit, noise_model=noise_model, samples=samples)
+    entanglement_score = entanglement_instance.calculate_entanglement()
+    return entanglement_score
+
+def compute_expressibility(ansatz, ansatz_name, num_samples=1000, bins=50, shots=1024):
     """
     Calculate the expressibility of a given ansatz by comparing the fidelity distribution
     to the Haar distribution.
-
     Args:
-        ansatz (QuantumCircuit): Parameterized quantum circuit representing the ansatz.
-        num_samples (int): Number of random parameter sets to sample.
-        num_qubits (int): Number of qubits in the circuit.
-        num_fidelity_bins (int): Number of bins for the fidelity histogram.
+        ansatz_name: from the config used for saving the plot.
+        ansatz (QuantumCircuit): A parameterized quantum circuit.
+        assigned_params: used to generate the correct # of params for arbitrary ansatz.
+        num_samples (int): Number of random parameter configurations for the ansatz.
+        haar_samples (int): Number of Haar-random states to generate. Default is 1000.
+        bins (int): Number of bins for histogram. Default is 50.
+        shots (int): Number of shots for sampling. Default is 1024.
 
     Returns:
-        float: KL divergence representing the expressibility of the ansatz.
+        float: KL divergence as the expressibility metric.
     """
-
     if ansatz.num_parameters == 0:
         raise ValueError("Ansatz has no parameters to bind for expressibility calculation.")
 
-    # Generate random parameter sets
     num_qubits = ansatz.num_qubits
-    fidelities = []
 
-    for _ in range(num_samples):
-        # Generate two random parameter sets
-        param_values_1 = 2 * np.pi * np.random.rand(num_qubits)
-        param_values_2 = 2 * np.pi * np.random.rand(num_qubits)
+    # Step 1: Generate fidelities for the ansatz
+    circuit_fidelities = []
+    param_list = [2 * np.pi * np.random.rand(ansatz.num_parameters) for _ in range(num_samples)]
 
-        # Bind parameters to create two different instances of the ansatz
-        circ1 = ansatz.assign_parameters(param_values_1)
-        circ2 = ansatz.assign_parameters(param_values_2)
+    for params_1 in param_list:
+        circuit_1 = ansatz.assign_parameters(params_1)
+        counts_1 = run_circuit(circuit_1)
 
-        # Get statevectors using simulate_statevector
-        statevector1 = simulate_statevector(circ1)
-        statevector2 = simulate_statevector(circ2)
+        # Generate a random second set of parameters
+        params_2 = 2 * np.pi * np.random.rand(ansatz.num_parameters)
+        circuit_2 = ansatz.assign_parameters(params_2)
+        counts_2 = run_circuit(circuit_2)
 
-        # Calculate the fidelity between the two statevectors
-        fidelity = state_fidelity(statevector1, statevector2)
-        fidelities.append(fidelity)
+        # Compute fidelity between the two distributions+
+        fidelity = calculate_fidelity_from_counts(counts_1, counts_2, shots)
+        circuit_fidelities.append(fidelity)
 
-    # Create a normalized histogram of fidelities
-    hist, bin_edges = np.histogram(fidelities, bins=num_fidelity_bins, range=(0, 1), density=True)
-    hist = hist / np.sum(hist)
+    # Step 2: Generate Haar-random fidelities
+    fidelity_range = np.linspace(0, 1, bins)
+    haar_distribution = (2 ** num_qubits - 1) * (1 - fidelity_range + 1e-8) ** (2 ** num_qubits - 2)
+    haar_prob = haar_distribution / haar_distribution.sum()
+    haar_fidelities = np.random.rand(num_samples)
+    haar_prob, _ = np.histogram(haar_fidelities, bins=bins, density=True)
+    haar_prob /= np.sum(haar_prob)
 
-    # Approximate Haar distribution (uniform for simplicity)
-    haar_dist = np.ones(num_fidelity_bins) / num_fidelity_bins
+    # Step 3: Compute histograms
+    circuit_hist, bin_edges = np.histogram(circuit_fidelities, bins=bins, range=(0, 1), density=True)
+    circuit_prob = circuit_hist / circuit_hist.sum()
+    print(f"circuit_prob:{circuit_prob}")
+    print(f"haar_prob:{haar_prob}")
+    print(f"Sum of Haar Probabilities: {np.sum(haar_prob)}")
+    print(f"Sum of Circuit Probabilities: {np.sum(circuit_prob)}")
+    kl_divergence = np.sum(rel_entr(circuit_prob + 1e-12, haar_prob + 1e-12))
 
-    # Calculate KL divergence as the expressibility metric
-    kl_divergence = scipy_entropy(hist, haar_dist)
+    bin_middles = (bin_edges[:-1] + bin_edges[1:]) / 2.0
+    plt.bar(bin_middles, circuit_prob, width=(1 / bins), alpha=0.5, label="Circuit")
+
+    plt.plot(fidelity_range, haar_prob, label="Haar", color="orange")
+
+    plt.legend()
+    plt.title(f"Expressibility ({ansatz_name}, KL Divergence: {kl_divergence:.3f})")
+    plt.xlabel("Fidelity")
+    plt.ylabel("Probability")
+
+    directory = "ansätze"
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    filename = f"{directory}/{ansatz_name}_expressibility.png"
+    plt.savefig(filename)
+    plt.close()
+    print(f"Plot saved as: {filename}")
+    print(f"KL Divergence: {kl_divergence}")
     return kl_divergence
 
+def calculate_fidelity_from_counts(counts_1, counts_2, shots):
+    """
+    Calculate fidelity between two measurement distributions (counts).
 
-def ent_cap(circuit: CircuitDescriptor, noise_model=None, samples=1000, measure="meyer-wallach", shots=1024):
-    entanglement_instance = EntanglementCapability(circuit=circuit, noise_model=noise_model, samples=samples)
-    entangling_capability = entanglement_instance.entanglement_capability(measure=measure, shots=shots)
-    return entangling_capability
+    Args:
+        counts_1 (dict): Measurement results from the first circuit.
+        counts_2 (dict): Measurement results from the second circuit.
+        shots (int): Number of shots in each measurement.
 
-def expressibility(circuit: CircuitDescriptor, noise_model=None, samples=1000, measure="kld", shots=1024):
-    expressibility_instance = Expressibility(circuit=circuit, noise_model=noise_model, samples=samples)
-    expressibility_score  = expressibility_instance.expressibility(measure=measure, shots=shots)
-    return expressibility_score
+    Returns:
+        float: Fidelity between the two distributions.
+    """
+    # Convert counts to probabilities
+    probs_1 = {key: value / shots for key, value in counts_1.items()}
+    probs_2 = {key: value / shots for key, value in counts_2.items()}
+
+    # Calculate fidelity
+    keys = set(probs_1.keys()).union(probs_2.keys())
+    fidelity = sum(np.sqrt(probs_1.get(key, 0) * probs_2.get(key, 0)) for key in keys)
+
+    return fidelity

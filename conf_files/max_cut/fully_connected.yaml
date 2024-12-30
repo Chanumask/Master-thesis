@@ -10,7 +10,7 @@ max_cut:
 
 vqe_parameters:
   ansatz_type: [HEA_1]
-  ansatz_layers: [2]
+  ansatz_layers: [1]
   plot_ansatz: True
   ent_gate: ['cx']
 
@@ -18,4 +18,4 @@ vqe_parameters:
   dropout_ratio: 0.2  # probability to remove cx/cz gates
   param_theta: np.pi/2
 
-  optimizer: SPSA            # Options: COBYLA, SPSA, NELDER_MEAD
+  optimizer: COBYLA            # Options: COBYLA, SPSA, NELDER_MEAD

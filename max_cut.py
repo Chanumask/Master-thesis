@@ -3,9 +3,8 @@ import numpy as np
 import itertools
 
 from qiskit_optimization.applications import Maxcut
-from qleet import CircuitDescriptor
 
-from eval import calculate_cut_cost, get_probabilities, calculate_entanglement_metrics, expressibility, ent_cap
+from eval import calculate_cut_cost, get_probabilities, calculate_entanglement_metrics, compute_expressibility
 from util import Result
 from vqe import create_vqe
 
@@ -40,9 +39,9 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
     ansatz, assigned_parameters, vqe = create_vqe(config, qubits, global_energy_history, num_iteration)
 
     # pre-training metrics
-    expressibility_score = expressibility(CircuitDescriptor(ansatz, assigned_parameters))
-    entangling_capability = ent_cap(CircuitDescriptor(ansatz, assigned_parameters))
-
+    if config['vqe_parameters']['plot_ansatz'] and num_iteration==0:
+        expressibility_score = compute_expressibility(ansatz, config['vqe_parameters']['ansatz_type'])
+        #entangling_capability = compute_ent_cap(ansatz)
     # Run optimization
     vqe_result = vqe.compute_minimum_eigenvalue(hamiltonian)
     optimized_ansatz = ansatz.assign_parameters(vqe_result.optimal_parameters)
@@ -50,8 +49,8 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
     probabilities = get_probabilities(optimized_ansatz)
 
     entanglement_metrics = calculate_entanglement_metrics(optimized_ansatz, probabilities)
-    entanglement_metrics['expressibility'] = expressibility_score
-    entanglement_metrics['entangling_capability'] = entangling_capability
+    # entanglement_metrics['expressibility'] = expressibility_score
+    # entanglement_metrics['entangling_capability'] = entangling_capability
 
     print(entanglement_metrics)
 

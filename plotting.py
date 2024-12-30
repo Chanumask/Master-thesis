@@ -191,7 +191,7 @@ def save_plots(all_data, metrics_to_plot, resultpath):
 
 def plot_metrics_across_run_from_csv(csvpath, results_folder):
     """Read CSV files from the results folder and plot relevant metrics."""
-    metrics_to_plot = ['e_per_qubit', 'meyer_wallach']
+    metrics_to_plot = ['meyer_wallach']
     all_data = {metric: [] for metric in metrics_to_plot}
     filenames = []
 
@@ -202,8 +202,8 @@ def plot_metrics_across_run_from_csv(csvpath, results_folder):
         metrics_data = eval(metrics_str)
 
         for metric in metrics_to_plot:
-            if metric in metrics_data[1]:
-                all_data[metric].append(metrics_data[1][metric])
+            if metric in metrics_data:
+                all_data[metric].append(metrics_data[metric])
             else:
                 all_data[metric].append(None)  # handle missing values
 

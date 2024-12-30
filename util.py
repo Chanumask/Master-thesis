@@ -19,6 +19,8 @@ def create_experiment_folder(base_dir="results"):
     Returns the path of the created experiment folder.
     """
     # Determine the next available Experiment_<index> folder
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
     existing_experiments = [int(folder.replace("Experiment_", "")) for folder in os.listdir(base_dir)
                             if folder.startswith("Experiment_") and folder.replace("Experiment_", "").isdigit()]
     next_experiment_index = max(existing_experiments) + 1 if existing_experiments else 1
