@@ -3,16 +3,14 @@ import os
 from qiskit import transpile
 from qiskit.primitives import Sampler
 from qiskit_aer import AerSimulator, StatevectorSimulator
-from qiskit.quantum_info import DensityMatrix, partial_trace, entropy, concurrence
-from qiskit.quantum_info.analysis import hellinger_fidelity
+from qiskit.quantum_info import DensityMatrix, partial_trace
 from qiskit import QuantumCircuit
 
-from qiskit.quantum_info import random_statevector
 from scipy.special import rel_entr
 from scipy.stats import entropy as scipy_entropy
 from matplotlib import pyplot as plt
 
-def run_circuit(circuit):
+def run_circuit(circuit, shots=1024):
     """Simulate the circuit and return the measurement counts."""
     if circuit.num_clbits == 0:
         # Add measurement gates if not present
@@ -20,7 +18,7 @@ def run_circuit(circuit):
         circuit.measure_all()
     simulator = AerSimulator()
     simulator.set_options(seed_simulator=1)
-    result = simulator.run(transpile(circuit, simulator), shots=1024).result()
+    result = simulator.run(transpile(circuit, simulator), shots=shots).result()
     counts = result.get_counts(circuit)
     return counts
 
@@ -34,12 +32,12 @@ def simulate_statevector(circuit: QuantumCircuit):
     return statevector
 
 
-def run_sampler_on_circuit(circuit):
+def run_sampler_on_circuit(circuit, shots=1024):
     """Run the sampler, obtain the solution distribution and get the most probable solution."""
     if circuit.num_clbits == 0:
         circuit = circuit.copy()
         circuit.measure_all()
-    sampler = Sampler(options={"shots": 1024})
+    sampler = Sampler(options={"shots": shots})
     result = sampler.run([circuit]).result()
     return result
 
@@ -54,18 +52,18 @@ def calculate_cut_cost(graph, solution):
     return cut_value
 
 
-def get_probabilities(circuit, num_shots=1024):
+def get_probabilities(circuit, shots=1024):
     """
     Obtain the probability distribution from sampling the circuit.
 
     Args:
         circuit (QuantumCircuit): The quantum circuit to sample.
-        num_shots (int): Number of shots for sampling.
+        shots (int): Number of shots for sampling.
 
     Returns:
         dict: A dictionary of bitstrings to probabilities.
     """
-    result = run_sampler_on_circuit(circuit)
+    result = run_sampler_on_circuit(circuit, shots=shots)
     quasi_dists = result.quasi_dists[0]
     probs = {format(key, f'0{circuit.num_qubits}b'): float(value) for key, value in quasi_dists.items()}
 
@@ -79,7 +77,7 @@ def get_probabilities(circuit, num_shots=1024):
 
 def calculate_entanglement_metrics(circuit, probabilities):
     """
-    Calculate entanglement metrics using the given probabilities.
+    Calculate entanglement metrics of the optimized circuit using the given probabilities.
 
     Args:
         circuit (QuantumCircuit): The quantum circuit analyzed.
@@ -136,23 +134,56 @@ def calculate_entanglement_metrics(circuit, probabilities):
 
     return metrics
 
-def ent_cap(circuit: QuantumCircuit, noise_model=None, samples=1000, measure="meyer-wallach", shots=1024):
+def entanglement_capability(ansatz, num_samples=1000, measure="meyer-wallach", shots=1024):
     """
-    Calculate entanglement capability of a circuit using the new EntanglementCapability class.
+    Calculate entanglement capability of a circuit.
 
     Args:
-        circuit (QuantumCircuit): The quantum circuit.
-        noise_model (NoiseModel): Optional Qiskit noise model.
-        samples (int): Number of samples for the experiment.
+        ansatz (QuantumCircuit): The parametrized quantum circuit (with no bound parameters).
+        num_samples (int): Number of samples for the experiment.
         measure (str): Measure for entanglement capability, e.g., "meyer-wallach".
         shots (int): Number of shots.
 
     Returns:
         float: Entanglement capability score.
     """
-    entanglement_instance = EntanglementCapability(circuit=circuit, noise_model=noise_model, samples=samples)
-    entanglement_score = entanglement_instance.calculate_entanglement()
-    return entanglement_score
+    if ansatz.num_parameters == 0:
+        raise ValueError("Ansatz has no parameters to sample for entanglement capability calculation.")
+
+    num_qubits = ansatz.num_qubits
+    param_list = [2 * np.pi * np.random.rand(ansatz.num_parameters) for _ in range(num_samples)]
+
+    entanglement_scores = []
+
+    for params in param_list:
+        # Assign parameters to the circuit
+        circuit = ansatz.assign_parameters(params)
+        counts = run_circuit(circuit, shots=shots)
+
+        total_shots = sum(counts.values())
+        sum_trace_rho_squared = 0
+
+        for i in range(num_qubits):
+            # Marginalize probabilities for the i-th qubit
+            marginal_probs = {}
+            for bitstring, count in counts.items():
+                key = bitstring[-(i + 1)]  # Extract the i-th qubit measurement result
+                marginal_probs[key] = marginal_probs.get(key, 0) + count
+
+            # Normalize probabilities
+            marginal_probs = {key: value / total_shots for key, value in marginal_probs.items()}
+
+            # Compute Tr(rho_i^2) for the i-th qubit
+            trace_rho_squared = sum(prob ** 2 for prob in marginal_probs.values())
+            sum_trace_rho_squared += trace_rho_squared
+
+        q = (4 / num_qubits) * (1 - (sum_trace_rho_squared/num_qubits))  # Meyer-Wallach measure
+        entanglement_scores.append(q)
+
+    avg_entanglement = np.mean(entanglement_scores)
+    print(f"entanglement capability: {avg_entanglement}")
+
+    return avg_entanglement
 
 def compute_expressibility(ansatz, ansatz_name, num_samples=1000, bins=50, shots=1024):
     """
@@ -160,10 +191,8 @@ def compute_expressibility(ansatz, ansatz_name, num_samples=1000, bins=50, shots
     to the Haar distribution.
     Args:
         ansatz_name: from the config used for saving the plot.
-        ansatz (QuantumCircuit): A parameterized quantum circuit.
-        assigned_params: used to generate the correct # of params for arbitrary ansatz.
+        ansatz (QuantumCircuit): A parameterized quantum circuit (with no bound parameters).
         num_samples (int): Number of random parameter configurations for the ansatz.
-        haar_samples (int): Number of Haar-random states to generate. Default is 1000.
         bins (int): Number of bins for histogram. Default is 50.
         shots (int): Number of shots for sampling. Default is 1024.
 
@@ -203,10 +232,6 @@ def compute_expressibility(ansatz, ansatz_name, num_samples=1000, bins=50, shots
     # Step 3: Compute histograms
     circuit_hist, bin_edges = np.histogram(circuit_fidelities, bins=bins, range=(0, 1), density=True)
     circuit_prob = circuit_hist / circuit_hist.sum()
-    print(f"circuit_prob:{circuit_prob}")
-    print(f"haar_prob:{haar_prob}")
-    print(f"Sum of Haar Probabilities: {np.sum(haar_prob)}")
-    print(f"Sum of Circuit Probabilities: {np.sum(circuit_prob)}")
     kl_divergence = np.sum(rel_entr(circuit_prob + 1e-12, haar_prob + 1e-12))
 
     bin_middles = (bin_edges[:-1] + bin_edges[1:]) / 2.0
@@ -215,18 +240,16 @@ def compute_expressibility(ansatz, ansatz_name, num_samples=1000, bins=50, shots
     plt.plot(fidelity_range, haar_prob, label="Haar", color="orange")
 
     plt.legend()
-    plt.title(f"Expressibility ({ansatz_name}, KL Divergence: {kl_divergence:.3f})")
+    plt.title(f"Expressibility ({ansatz_name}), KL Divergence: {kl_divergence:.3f})")
     plt.xlabel("Fidelity")
     plt.ylabel("Probability")
 
     directory = "ansätze"
     if not os.path.exists(directory):
         os.makedirs(directory)
-    filename = f"{directory}/{ansatz_name}_expressibility.png"
-    plt.savefig(filename)
+    plt.savefig(f"{ansatz_name}_expressibility.png")
     plt.close()
-    print(f"Plot saved as: {filename}")
-    print(f"KL Divergence: {kl_divergence}")
+    # print(f"KL Divergence: {kl_divergence}")
     return kl_divergence
 
 def calculate_fidelity_from_counts(counts_1, counts_2, shots):

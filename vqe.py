@@ -1,13 +1,10 @@
 import numpy as np
-import os
 from qiskit import QuantumCircuit
 from qiskit.circuit import Parameter
 
 from qiskit_algorithms.minimum_eigensolvers import VQE
 from qiskit.primitives import Estimator
 from qiskit_algorithms.optimizers import COBYLA, SPSA, NELDER_MEAD
-
-from util import generate_qpic_circuit
 
 global_energy_history = []
 
@@ -103,7 +100,6 @@ def create_test_ansatz(num_qubits, depth=2):
 def create_vqe(config, qubits, energy_history, num_iteration):
     ansatz_depth = config['vqe_parameters']['ansatz_layers']
     ansatz_type = config['vqe_parameters']['ansatz_type']
-    plot_ansatz = config['vqe_parameters']['plot_ansatz']
 
     entangle_method = config['vqe_parameters'].get('entangle_method', 'dropout')
     dropout_ratio = config['vqe_parameters']['dropout_ratio']
@@ -130,18 +126,6 @@ def create_vqe(config, qubits, energy_history, num_iteration):
         pass
     else:
         raise ValueError(f"Unsupported entangle method: {entangle_method}")
-
-    if plot_ansatz and num_iteration ==0:
-        qpic_str = generate_qpic_circuit(ansatz)
-        directory = "ansätze"
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
-        # Save the QPIC file in the "ansätze" directory
-        qpic_filename = f"{directory}/{ansatz_type}.qpic"
-        with open(qpic_filename, 'w', encoding='utf-8') as file:
-            file.write(qpic_str)
-        print(f"Generated QPIC file for ansatz: {qpic_filename}")
 
     estimator = Estimator()
 

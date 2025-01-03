@@ -1,11 +1,13 @@
 import networkx as nx
+import os
 import numpy as np
 import itertools
 
 from qiskit_optimization.applications import Maxcut
 
-from eval import calculate_cut_cost, get_probabilities, calculate_entanglement_metrics, compute_expressibility
-from util import Result
+from eval import calculate_cut_cost, get_probabilities, calculate_entanglement_metrics, compute_expressibility, \
+    entanglement_capability
+from util import Result, generate_qpic_circuit
 from vqe import create_vqe
 
 
@@ -38,10 +40,51 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
     global_energy_history = []
     ansatz, assigned_parameters, vqe = create_vqe(config, qubits, global_energy_history, num_iteration)
 
-    # pre-training metrics
-    if config['vqe_parameters']['plot_ansatz'] and num_iteration==0:
-        expressibility_score = compute_expressibility(ansatz, config['vqe_parameters']['ansatz_type'])
-        #entangling_capability = compute_ent_cap(ansatz)
+    # calculate pre-training metrics and plot ansatz
+    expressibility_score = None
+    entangling_capability = None
+
+    if num_iteration == 0:
+        entangling_capability = entanglement_capability(ansatz)
+
+        if config['vqe_parameters']['plot_ansatz']:
+            ansatz_type = config['vqe_parameters']['ansatz_type']
+            ansatz_layers = config['vqe_parameters']['ansatz_layers']
+            entangle_method = config['vqe_parameters']['entangle_method']
+            directory = "ansätze"
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+
+            # Generate QPIC filename
+            qpic_filename = f"{directory}/{ansatz_type}.qpic"
+
+            # Determine the suffix based on the entangle method
+            if entangle_method == 'dropout':
+                suffix = f"d{config['vqe_parameters']['dropout_ratio']}"
+            elif entangle_method == 'parametrize':
+                suffix = f"p{config['vqe_parameters']['param_theta']}"
+            else:
+                suffix = ""
+
+            # Construct the expressibility filename
+            expressibility_filename = f"{directory}/{ansatz_type}_{ansatz_layers}_{suffix}".strip("_")
+
+            # Check if the file already exists
+            if not os.path.exists(os.path.join(expressibility_filename,"_expressibility.png")):
+                expressibility_score = compute_expressibility(ansatz, expressibility_filename)
+                print(f"Generated expressibility graph: {expressibility_filename}")
+            else:
+                print(f"Expressibility graph already exists: {expressibility_filename}")
+
+            # Generate QPIC file
+            if not os.path.exists(qpic_filename):
+                qpic_str = generate_qpic_circuit(ansatz)
+                with open(qpic_filename, 'w', encoding='utf-8') as file:
+                    file.write(qpic_str)
+                print(f"Generated QPIC file for ansatz: {qpic_filename}")
+            else:
+                print(f"QPIC file already exists: {qpic_filename}")
+
     # Run optimization
     vqe_result = vqe.compute_minimum_eigenvalue(hamiltonian)
     optimized_ansatz = ansatz.assign_parameters(vqe_result.optimal_parameters)
@@ -49,8 +92,8 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
     probabilities = get_probabilities(optimized_ansatz)
 
     entanglement_metrics = calculate_entanglement_metrics(optimized_ansatz, probabilities)
-    # entanglement_metrics['expressibility'] = expressibility_score
-    # entanglement_metrics['entangling_capability'] = entangling_capability
+    entanglement_metrics['expressibility'] = expressibility_score
+    entanglement_metrics['entangling_capability'] = entangling_capability
 
     print(entanglement_metrics)
 
