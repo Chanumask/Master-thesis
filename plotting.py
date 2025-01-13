@@ -62,6 +62,7 @@ def extract_metrics(data_frame):
         param_theta = row.get('param_theta', None)
         approximation_ratio = row.get('approximation_ratio', None)
 
+
         # Safely evaluate param_theta if it's a string expression
         if isinstance(param_theta, str):
             try:
@@ -75,12 +76,16 @@ def extract_metrics(data_frame):
         try:
             # Convert string to dictionary
             metrics_data = ast.literal_eval(safe_metrics_str)
-            e_per_qubit_value = metrics_data[1]['e_per_qubit']
-            meyer_wallach_value = metrics_data[1]['meyer_wallach']
+            e_per_qubit_value = metrics_data['e_per_qubit']
+            meyer_wallach_value = metrics_data['meyer_wallach']
+            ent_cap = metrics_data['entangling_capability']
+            expressibility = metrics_data['expressibility']
         except (ValueError, SyntaxError) as e:
             print(f"Error parsing metrics: {e}")
             e_per_qubit_value = None
             meyer_wallach_value = None
+            ent_cap = None
+            expressibility = None
 
         metrics_list.append({
             'ansatz_type': ansatz_type,
@@ -90,7 +95,9 @@ def extract_metrics(data_frame):
             'param_theta': param_theta,  # Now numeric if evaluable
             'e_per_qubit': e_per_qubit_value,
             'meyer_wallach': meyer_wallach_value,
-            'approximation_ratio': approximation_ratio
+            'approximation_ratio': approximation_ratio,
+            'entangling_capability': ent_cap,
+            'expressibility': expressibility
         })
     metrics_df = pd.DataFrame(metrics_list)
     return metrics_df
@@ -212,21 +219,29 @@ def plot_metrics_across_run_from_csv(csvpath, results_folder):
 
 def plot_metrics_with_grouping(metrics_df, parameter_column, group_column, metrics_to_plot, experiment_folder):
     """
-    Plot average entanglement metrics vs. ansatz_layers with different colors for each dropout value and save the plot.
+    Plot average metrics vs. a parameter, grouped by another column.
+
     Args:
         metrics_df (pd.DataFrame): DataFrame with metrics data.
-        parameter_column (str): The column name for the x-axis (e.g., 'ansatz_layers').
-        group_column (str): The column to group by for color coding (e.g., 'dropout_ratio').
-        experiment_folder (str): Path to the experiment folder where the plot will be saved.
-        metrics_to_plot (list): list of metrics to generate plots for on the vertical axis
+        parameter_column (str): Column name for the x-axis (e.g., 'ansatz_layers').
+        group_column (str): Column to group by (e.g., 'dropout_ratio').
+        metrics_to_plot (list): List of metrics to plot (y-axis).
+        experiment_folder (str): Directory where the plots will be saved.
     """
-    # Group the data by the parameter column and group column
     print(metrics_df.columns)
-    grouped_metrics = metrics_df.groupby([parameter_column, group_column]).mean().reset_index()
+
+    # Filter only numeric columns for grouping and aggregation
+    numeric_columns = metrics_df.select_dtypes(include=[np.number]).columns
+
+    # Avoid duplicate column insertion after resetting the index
+    grouped_metrics = metrics_df.groupby([parameter_column, group_column])[numeric_columns].mean()
 
     for metric in metrics_to_plot:
+        if metric not in grouped_metrics.columns:
+            print(f"Metric '{metric}' is not in the grouped data. Skipping...")
+            continue
+
         plt.figure(figsize=(10, 6))
-        # Use seaborn for easy color handling
         sns.lineplot(
             data=grouped_metrics,
             x=parameter_column,
@@ -243,6 +258,58 @@ def plot_metrics_with_grouping(metrics_df, parameter_column, group_column, metri
 
         # Save the plot to the experiment folder
         save_path = os.path.join(experiment_folder, f"{metric}_vs_{parameter_column}_by_{group_column}.png")
+        plt.savefig(save_path)
+        plt.close()
+        print(f"Saved plot to {save_path}")
+
+
+def plot_expressibility_entanglement(metrics_df, x_column, group_column, experiment_folder):
+    """
+    Plot expressibility and entangling capability metrics for varying parameters.
+
+    Args:
+        metrics_df (pd.DataFrame): DataFrame containing the metrics data.
+        x_column (str): The column name for the x-axis (e.g., 'ansatz_layers', 'dropout_ratio', 'param_theta').
+        group_column (str): The column to group by for color coding (e.g., 'ansatz_type', 'dropout_ratio').
+        experiment_folder (str): Path to the experiment folder where the plots will be saved.
+    """
+    print(metrics_df.columns)
+
+    # Metrics to plot
+    metrics_to_plot = ['expressibility', 'entangling_capability']
+
+    # Filter numeric columns
+    numeric_columns = metrics_df.select_dtypes(include=[np.number]).columns.tolist()
+
+    # Ensure that `x_column` and `group_column` are included
+    numeric_columns = list(set(numeric_columns + [x_column, group_column]))
+
+    # Group the data using only numeric columns
+    grouped_metrics = metrics_df[numeric_columns].groupby([x_column, group_column]).mean().reset_index()
+
+    for metric in metrics_to_plot:
+        if metric not in grouped_metrics.columns:
+            print(f"Metric '{metric}' not found in grouped data. Skipping...")
+            continue
+
+        # Create the plot
+        plt.figure(figsize=(10, 6))
+        sns.lineplot(
+            data=grouped_metrics,
+            x=x_column,
+            y=metric,
+            hue=group_column,
+            marker="o",
+            palette="tab10"
+        )
+        plt.title(f"{metric.replace('_', ' ').title()} vs. {x_column.replace('_', ' ').title()} (Grouped by {group_column.replace('_', ' ').title()})")
+        plt.xlabel(x_column.replace('_', ' ').title())
+        plt.ylabel(metric.replace('_', ' ').title())
+        plt.legend(title=group_column.replace('_', ' ').title(), loc="best")
+        plt.grid(True)
+
+        # Save the plot
+        save_path = os.path.join(experiment_folder, f"{metric}_vs_{x_column}_by_{group_column}.png")
         plt.savefig(save_path)
         plt.close()
         print(f"Saved plot to {save_path}")

@@ -45,7 +45,7 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
     entangling_capability = None
 
     if num_iteration == 0:
-        entangling_capability = entanglement_capability(ansatz)
+        # entangling_capability = entanglement_capability(ansatz)
 
         if config['vqe_parameters']['plot_ansatz']:
             ansatz_type = config['vqe_parameters']['ansatz_type']
@@ -62,7 +62,17 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
             if entangle_method == 'dropout':
                 suffix = f"d{config['vqe_parameters']['dropout_ratio']}"
             elif entangle_method == 'parametrize':
-                suffix = f"p{config['vqe_parameters']['param_theta']}"
+                param_theta = config['vqe_parameters']['param_theta']
+
+                if 'pi' in param_theta:
+                    # Extract everything after 'pi' (e.g., "/2" or "/4") and replace "/" with "_"
+                    pi_part = param_theta.split('pi')[1].strip()  # Gets the part after 'pi'
+                    sanitized_theta = f"pi{pi_part.replace('/', '_')}" if pi_part else "pi"
+                else:
+                    # If 'pi' is not in the string, keep the original value as the suffix
+                    sanitized_theta = param_theta.replace("/", "_")
+                suffix = f"p{sanitized_theta}"
+
             else:
                 suffix = ""
 

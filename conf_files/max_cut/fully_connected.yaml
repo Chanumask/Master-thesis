@@ -1,5 +1,5 @@
 problem_class: max_cut
-iterations: 5 # how many runs using the same seed
+iterations: 50 # how many runs using the same seed
 base_seed: 42
 num_seeds: 1
 
@@ -10,12 +10,12 @@ max_cut:
 
 vqe_parameters:
   ansatz_type: [HEA_1,HEA_2,HEA_3]
-  ansatz_layers: [5]
-  plot_ansatz: True
-  ent_gate: ['cx']
+  ansatz_layers: [1,2,3,4,5]
+  plot_ansatz: False
+  ent_gate: ['cx', 'cz']
 
-  entangle_method: 'dropout' # Options: none, dropout, parametrize
-  dropout_ratio: [0.2,0.4,0.6,0.8]  # probability to remove cx/cz gates
-  param_theta: np.pi/2
+  entangle_method: 'dropout'          # Options: none, dropout, parametrize
+  dropout_ratio: [0,0.2,0.4,0.6,0.8]    # probability to remove cx/cz gates
+  param_theta: np.pi/2 # [np.pi/2, np.pi/4, np.pi/8]
 
   optimizer: COBYLA            # Options: COBYLA, SPSA, NELDER_MEAD

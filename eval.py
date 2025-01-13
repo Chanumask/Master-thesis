@@ -134,7 +134,7 @@ def calculate_entanglement_metrics(circuit, probabilities):
 
     return metrics
 
-def entanglement_capability(ansatz, num_samples=1000, measure="meyer-wallach", shots=1024):
+def entanglement_capability(ansatz, num_samples=1000, measure="meyer-wallach"):
     """
     Calculate entanglement capability of a circuit.
 
@@ -142,7 +142,6 @@ def entanglement_capability(ansatz, num_samples=1000, measure="meyer-wallach", s
         ansatz (QuantumCircuit): The parametrized quantum circuit (with no bound parameters).
         num_samples (int): Number of samples for the experiment.
         measure (str): Measure for entanglement capability, e.g., "meyer-wallach".
-        shots (int): Number of shots.
 
     Returns:
         float: Entanglement capability score.
@@ -158,7 +157,7 @@ def entanglement_capability(ansatz, num_samples=1000, measure="meyer-wallach", s
     for params in param_list:
         # Assign parameters to the circuit
         circuit = ansatz.assign_parameters(params)
-        counts = run_circuit(circuit, shots=shots)
+        counts = run_circuit(circuit, shots=num_samples)
 
         total_shots = sum(counts.values())
         sum_trace_rho_squared = 0
@@ -185,7 +184,7 @@ def entanglement_capability(ansatz, num_samples=1000, measure="meyer-wallach", s
 
     return avg_entanglement
 
-def compute_expressibility(ansatz, ansatz_name, num_samples=1000, bins=50, shots=1024):
+def compute_expressibility(ansatz, ansatz_name, num_samples=1000, bins=50):
     """
     Calculate the expressibility of a given ansatz by comparing the fidelity distribution
     to the Haar distribution.
@@ -218,7 +217,7 @@ def compute_expressibility(ansatz, ansatz_name, num_samples=1000, bins=50, shots
         counts_2 = run_circuit(circuit_2)
 
         # Compute fidelity between the two distributions+
-        fidelity = calculate_fidelity_from_counts(counts_1, counts_2, shots)
+        fidelity = calculate_fidelity_from_counts(counts_1, counts_2, num_samples)
         circuit_fidelities.append(fidelity)
 
     # Step 2: Generate Haar-random fidelities
