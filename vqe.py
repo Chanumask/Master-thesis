@@ -21,7 +21,20 @@ def create_hea(num_qubits, depth, ansatz_id, ent_gate='cx'):
             raise ValueError("ent_gate must be 'cx' or 'cz'.")
 
     if ansatz_id == 1:
-        # Ansatz 1: typical HEA from many papers
+        # Ansatz 1: single rotational gate RY ansatz
+        theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(2 * depth)]
+
+        for d in range(depth):
+            for i in range(num_qubits):
+                theta_ry = theta_list[2 * i + 2 * num_qubits * d]
+                circuit.ry(theta_ry, i)
+
+            for i in range(num_qubits - 1):
+                add_entangling_gate(circuit, i, i + 1)
+            add_entangling_gate(circuit, num_qubits - 1, 0)
+
+    elif ansatz_id == 2:
+        # Ansatz 2: double rotational ansatz RYRX ansatz from Sim et. al and found in many other papers (high expr.)
         theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(2 * depth)]
 
         for d in range(depth):
@@ -29,31 +42,16 @@ def create_hea(num_qubits, depth, ansatz_id, ent_gate='cx'):
                 theta_ry = theta_list[2 * i + 2 * num_qubits * d]
                 circuit.ry(theta_ry, i)
             for i in range(num_qubits):
-                theta_rz = theta_list[2 * i + 1 + 2 * num_qubits * d]
-                circuit.rz(theta_rz, i)
-
-            for i in range(num_qubits - 1):
-                add_entangling_gate(circuit, i, i + 1)
-            add_entangling_gate(circuit, num_qubits - 1, 0)
-
-    elif ansatz_id == 2:
-        # Ansatz 2: circuit 2 as shown in the image from sim expressibility
-        theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(2 * depth)]
-
-        for d in range(depth):
-            for i in range(num_qubits):
-                theta_rx = theta_list[2 * i + 2 * num_qubits * d]
+                theta_rx = theta_list[2 * i + 1 + 2 * num_qubits * d]
                 circuit.rx(theta_rx, i)
-            for i in range(num_qubits):
-                theta_rz = theta_list[2 * i + 1 + 2 * num_qubits * d]
-                circuit.rz(theta_rz, i)
 
             for i in range(num_qubits - 1):
                 add_entangling_gate(circuit, i, i + 1)
             add_entangling_gate(circuit, num_qubits - 1, 0)
+
 
     elif ansatz_id == 3:
-        # Ansatz 3: Circuit 15 as shown in sim expressibility
+        # Ansatz 3: Uneven entanglement structure, Circuit 15 as shown in sim expressibility (low expr.)
         theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(depth)]
 
         for d in range(depth):
@@ -111,7 +109,7 @@ def create_vqe(config, qubits, energy_history, num_iteration):
     if ansatz_type.startswith('HEA'):
         try:
             ansatz_id = int(ansatz_type.split('_')[-1])
-            ansatz, assigned_params = create_hea(qubits, ansatz_depth, ansatz_id, config['vqe_parameters'].get('ent_gate', 'cx'))
+            ansatz, assigned_params = create_hea(qubits, ansatz_depth, ansatz_id)
         except (ValueError, IndexError):
             raise ValueError(f"Invalid HEA ansatz type format: {ansatz_type}. Expected format: 'HEA_<int>'")
     else:

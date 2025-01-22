@@ -45,12 +45,14 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
     entangling_capability = None
 
     if num_iteration == 0:
-        # entangling_capability = entanglement_capability(ansatz)
+        ansatz_type = config['vqe_parameters']['ansatz_type']
+        ansatz_layers = config['vqe_parameters']['ansatz_layers']
+        entangle_method = config['vqe_parameters']['entangle_method']
+        if config['eval']['ent_cap']:
+            entangling_capability = entanglement_capability(ansatz)
 
-        if config['vqe_parameters']['plot_ansatz']:
-            ansatz_type = config['vqe_parameters']['ansatz_type']
-            ansatz_layers = config['vqe_parameters']['ansatz_layers']
-            entangle_method = config['vqe_parameters']['entangle_method']
+        if config['eval']['qpic']:
+
             directory = "ansätze"
             if not os.path.exists(directory):
                 os.makedirs(directory)
@@ -58,6 +60,16 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
             # Generate QPIC filename
             qpic_filename = f"{directory}/{ansatz_type}.qpic"
 
+            # Generate QPIC file
+            if not os.path.exists(qpic_filename):
+                qpic_str = generate_qpic_circuit(ansatz)
+                with open(qpic_filename, 'w', encoding='utf-8') as file:
+                    file.write(qpic_str)
+                print(f"Generated QPIC file for ansatz: {qpic_filename}")
+            else:
+                print(f"QPIC file already exists: {qpic_filename}")
+
+        if config['eval']['expressibility']:
             # Determine the suffix based on the entangle method
             if entangle_method == 'dropout':
                 suffix = f"d{config['vqe_parameters']['dropout_ratio']}"
@@ -80,20 +92,11 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
             expressibility_filename = f"{directory}/{ansatz_type}_{ansatz_layers}_{suffix}".strip("_")
 
             # Check if the file already exists
-            if not os.path.exists(os.path.join(expressibility_filename,"_expressibility.png")):
+            if not os.path.exists(os.path.join(expressibility_filename, "_expressibility.png")):
                 expressibility_score = compute_expressibility(ansatz, expressibility_filename)
                 print(f"Generated expressibility graph: {expressibility_filename}")
             else:
                 print(f"Expressibility graph already exists: {expressibility_filename}")
-
-            # Generate QPIC file
-            if not os.path.exists(qpic_filename):
-                qpic_str = generate_qpic_circuit(ansatz)
-                with open(qpic_filename, 'w', encoding='utf-8') as file:
-                    file.write(qpic_str)
-                print(f"Generated QPIC file for ansatz: {qpic_filename}")
-            else:
-                print(f"QPIC file already exists: {qpic_filename}")
 
     # Run optimization
     vqe_result = vqe.compute_minimum_eigenvalue(hamiltonian)

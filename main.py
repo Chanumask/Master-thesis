@@ -89,24 +89,24 @@ def run_single_experiment(config, logging, plotting, run_folder):
 if __name__ == '__main__':
     problem_type = "max_cut"
     config_name = "fully_connected"
-    # experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=True)
-    experiment_path = "results/Experiment_8"
+    experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=False)
+    # experiment_path = "results/Experiment_8"
 
     # parameter_column = ['ansatz_layers','dropout_ratio', 'param_theta']  # ansatz_layers, dropout_ratio, param_theta
 
-    combined_df = read_all_runs(config_name, experiment_ids = [8])
-    metrics_df = extract_metrics(combined_df)
+    # combined_df = read_all_runs(config_name, experiment_ids = [8])
+    # metrics_df = extract_metrics(combined_df)
     # plot_average_metrics(metrics_df, parameter_column, experiment_path)
     # plot_approximation_vs_entanglement(metrics_df, experiment_path)
     # plot_metrics_with_dropout(metrics_df, parameter_column='ansatz_layers', group_column='dropout_ratio', experiment_folder=experiment_path)
 
-    plot_metrics_with_grouping(
-        metrics_df=metrics_df.drop(columns=['entangling_capability', 'expressibility']),
-        parameter_column='dropout_ratio',      # x axis
-        group_column='ansatz_type',            # Grouping by ansatz type
-        metrics_to_plot=['approximation_ratio'],
-        experiment_folder=experiment_path
-    )
+    # plot_metrics_with_grouping(
+    #     metrics_df=metrics_df.drop(columns=['entangling_capability', 'expressibility']),
+    #     parameter_column='dropout_ratio',      # x axis
+    #     group_column='ansatz_type',            # Grouping by ansatz type
+    #     metrics_to_plot=['approximation_ratio'],
+    #     experiment_folder=experiment_path
+    # )
 
     # plot_expressibility_entanglement(
     #     metrics_df=metrics_df,
