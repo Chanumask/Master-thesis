@@ -43,6 +43,7 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
     # calculate pre-training metrics and plot ansatz
     expressibility_score = None
     entangling_capability = None
+    directory = "ansätze"
 
     if num_iteration == 0:
         ansatz_type = config['vqe_parameters']['ansatz_type']
@@ -52,8 +53,6 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
             entangling_capability = entanglement_capability(ansatz)
 
         if config['eval']['qpic']:
-
-            directory = "ansätze"
             if not os.path.exists(directory):
                 os.makedirs(directory)
 
