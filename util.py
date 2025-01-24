@@ -59,6 +59,8 @@ class Result:
     entanglement_metrics: Dict[str, float] = None
     energy_history: [float] = None
 
+    iter_time: float = None
+
     def compute_cut_cost_difference(self):
         """Calculate the energy difference if target_value is provided."""
         if self.brute_forced_cost is not None:

@@ -17,8 +17,12 @@ def run_experiment(problem_name, config_file_name, logging, plotting):
     """
     # Load the configuration
     config = load_config(f'conf_files/{problem_name}/{config_file_name}.yaml')
-    list_parameters = {key: value for key, value in config['vqe_parameters'].items() if isinstance(value, list)}
-
+    list_parameters = {
+        key: value
+        for section in ['vqe_parameters', 'max_cut']
+        for key, value in config.get(section, {}).items()
+        if isinstance(value, list)
+    }
     # Create an experiment folder for this set of runs
     experiment_folder = create_experiment_folder()
 
@@ -27,8 +31,8 @@ def run_experiment(problem_name, config_file_name, logging, plotting):
         keys, values = zip(*list_parameters.items())
         combinations = [dict(zip(keys, combination)) for combination in product(*values)]
 
-        for combination in combinations:
-            print(f"Running experiment with parameters: {combination}")
+        for i, combination in enumerate(combinations):
+            print(f"Running experiment ({i+1}/{len(combinations)})with parameters: {combination}")
 
             # Create a run folder inside the experiment folder
             run_folder = create_run_folder(experiment_folder)
@@ -36,7 +40,10 @@ def run_experiment(problem_name, config_file_name, logging, plotting):
             # Update the configuration with the current combination
             updated_config = config.copy()
             for key, value in combination.items():
-                updated_config['vqe_parameters'][key] = value
+                if key in config['vqe_parameters']:
+                    updated_config['vqe_parameters'][key] = value
+                elif key in config['max_cut']:
+                    updated_config['max_cut'][key] = value
 
             # Pass the run folder to the single-run experiment
             run_single_experiment(updated_config, logging, plotting, run_folder)

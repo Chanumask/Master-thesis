@@ -1,3 +1,5 @@
+import time
+
 import networkx as nx
 import os
 import numpy as np
@@ -33,7 +35,7 @@ def brute_force_max_cut(graph):
 def run_vqe_for_max_cut(g, config, seed, num_iteration):
     """Solve the MaxCut problem on a given NetworkX graph using VQE."""
     # print("Starting VQE optimization for MAX-CUT problem")
-
+    start_time = time.time()
     qubits = g.number_of_nodes()
     hamiltonian, offset = get_hamiltonian(g)
 
@@ -114,6 +116,9 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
     cut_cost = calculate_cut_cost(g, bitstring_solution)
     optimal_cut_value = brute_force_max_cut(g)
 
+    end_time = time.time()
+    iteration_time = start_time - end_time
+    print(iteration_time)
     # Log results to CSV
     result = Result(
         graph_edges=list(g.edges()),
@@ -125,6 +130,7 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
         entanglement_metrics=entanglement_metrics,
         energy_history=global_energy_history,
         seed=seed,
+        iter_time=iteration_time
     )
     result.compute_cut_cost_difference()
     result.compute_approximation_ratio()
