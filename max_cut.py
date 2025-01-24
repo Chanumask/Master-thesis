@@ -93,7 +93,7 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
 
             # Check if the file already exists
             if not os.path.exists(os.path.join(expressibility_filename, "_expressibility.png")):
-                expressibility_score = compute_expressibility(ansatz, expressibility_filename)
+                expressibility_score = compute_expressibility(ansatz, expressibility_filename, plot_expressibility=config['eval']['expr_plot'])
                 print(f"Generated expressibility graph: {expressibility_filename}")
             else:
                 print(f"Expressibility graph already exists: {expressibility_filename}")

@@ -19,4 +19,5 @@ vqe_parameters:
 eval:
   ent_cap: True
   expressibility: True
+  expr_plot: False
   qpic: False

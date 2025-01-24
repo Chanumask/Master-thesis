@@ -10,6 +10,9 @@ from scipy.special import rel_entr
 from scipy.stats import entropy as scipy_entropy
 from matplotlib import pyplot as plt
 
+from plotting import plot_expressibility_entanglement
+
+
 def run_circuit(circuit, shots=1024):
     """Simulate the circuit and return the measurement counts."""
     if circuit.num_clbits == 0:
@@ -184,7 +187,7 @@ def entanglement_capability(ansatz, num_samples=1000, measure="meyer-wallach"):
 
     return avg_entanglement
 
-def compute_expressibility(ansatz, ansatz_name, num_samples=1000, bins=50):
+def compute_expressibility(ansatz, ansatz_name, num_samples=1000, bins=50, plot_expressibility=False):
     """
     Calculate the expressibility of a given ansatz by comparing the fidelity distribution
     to the Haar distribution.
@@ -193,7 +196,7 @@ def compute_expressibility(ansatz, ansatz_name, num_samples=1000, bins=50):
         ansatz (QuantumCircuit): A parameterized quantum circuit (with no bound parameters).
         num_samples (int): Number of random parameter configurations for the ansatz.
         bins (int): Number of bins for histogram. Default is 50.
-        shots (int): Number of shots for sampling. Default is 1024.
+        plot_expressibility (bool): should be false when working with slurm.
 
     Returns:
         float: KL divergence as the expressibility metric.
@@ -233,22 +236,23 @@ def compute_expressibility(ansatz, ansatz_name, num_samples=1000, bins=50):
     circuit_prob = circuit_hist / circuit_hist.sum()
     kl_divergence = np.sum(rel_entr(circuit_prob + 1e-12, haar_prob + 1e-12))
 
-    bin_middles = (bin_edges[:-1] + bin_edges[1:]) / 2.0
-    plt.bar(bin_middles, circuit_prob, width=(1 / bins), alpha=0.5, label="Circuit")
+    if plot_expressibility:
+        bin_middles = (bin_edges[:-1] + bin_edges[1:]) / 2.0
+        plt.bar(bin_middles, circuit_prob, width=(1 / bins), alpha=0.5, label="Circuit")
 
-    plt.plot(fidelity_range, haar_prob, label="Haar", color="orange")
+        plt.plot(fidelity_range, haar_prob, label="Haar", color="orange")
 
-    plt.legend()
-    plt.title(f"Expressibility ({ansatz_name}), KL Divergence: {kl_divergence:.3f})")
-    plt.xlabel("Fidelity")
-    plt.ylabel("Probability")
+        plt.legend()
+        plt.title(f"Expressibility ({ansatz_name}), KL Divergence: {kl_divergence:.3f})")
+        plt.xlabel("Fidelity")
+        plt.ylabel("Probability")
 
-    directory = "ansätze"
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    plt.savefig(f"{ansatz_name}_expressibility.png")
-    plt.close()
-    # print(f"KL Divergence: {kl_divergence}")
+        directory = "ansätze"
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        plt.savefig(f"{ansatz_name}_expressibility.png")
+        plt.close()
+        # print(f"KL Divergence: {kl_divergence}")
     return kl_divergence
 
 def calculate_fidelity_from_counts(counts_1, counts_2, shots):
