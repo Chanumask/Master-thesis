@@ -55,12 +55,14 @@ def extract_metrics(data_frame):
     metrics_list = []
     for _, row in data_frame.iterrows():
         metrics_str = row['entanglement_metrics']
+        nodes = row.get('nodes', None)
         ansatz_type = row.get('ansatz_type', None)
         dropout_ratio = row.get('dropout_ratio', None)
         ansatz_layers = row.get('ansatz_layers', None)
         ent_gate = row.get('ent_gate', None)
         param_theta = row.get('param_theta', None)
         approximation_ratio = row.get('approximation_ratio', None)
+        iteration_time = row.get('iter_time', None)
 
 
         # Safely evaluate param_theta if it's a string expression
@@ -88,6 +90,7 @@ def extract_metrics(data_frame):
             expressibility = None
 
         metrics_list.append({
+            'nodes': nodes,
             'ansatz_type': ansatz_type,
             'ansatz_layers': ansatz_layers,
             'ent_gate': ent_gate,
@@ -97,7 +100,8 @@ def extract_metrics(data_frame):
             'meyer_wallach': meyer_wallach_value,
             'approximation_ratio': approximation_ratio,
             'entangling_capability': ent_cap,
-            'expressibility': expressibility
+            'expressibility': expressibility,
+            'iteration_time': iteration_time
         })
     metrics_df = pd.DataFrame(metrics_list)
     return metrics_df
@@ -313,3 +317,95 @@ def plot_expressibility_entanglement(metrics_df, x_column, group_column, experim
         plt.savefig(save_path)
         plt.close()
         print(f"Saved plot to {save_path}")
+
+def plot_average_iteration_time(metrics_df, experiment_folder):
+    """
+    Plot average iteration time for each run against the number of qubits.
+    Group data by ansatz_type and ansatz_layers.
+    Display the times in MM:SS format on the primary axis.
+
+    Args:
+        metrics_df (pd.DataFrame): DataFrame containing metrics data.
+        experiment_folder (str): Path to the folder where the plots will be saved.
+    """
+    # Ensure numeric columns
+    metrics_df['nodes'] = pd.to_numeric(metrics_df['nodes'], errors='coerce')
+    metrics_df['iteration_time'] = pd.to_numeric(metrics_df['iteration_time'], errors='coerce')
+
+    # Take the absolute value of iteration_time
+    metrics_df['iteration_time'] = metrics_df['iteration_time'].abs()
+
+    # Drop rows with missing data
+    metrics_df = metrics_df.dropna(subset=['nodes', 'iteration_time', 'ansatz_type', 'ansatz_layers'])
+
+    # Calculate average times
+    average_including_first = metrics_df.groupby(['nodes', 'ansatz_type', 'ansatz_layers'])['iteration_time'].mean()
+    metrics_df_excluding_first = metrics_df.loc[
+        metrics_df.groupby(['nodes', 'ansatz_type', 'ansatz_layers']).cumcount() > 0]
+    average_excluding_first = metrics_df_excluding_first.groupby(['nodes', 'ansatz_type', 'ansatz_layers'])[
+        'iteration_time'].mean()
+
+    # Convert seconds to MM:SS format
+    def format_seconds(seconds, add_strings=False):
+        minutes = int(seconds // 60)
+        sec = int(seconds % 60)
+        if add_strings:
+            return f"{minutes} min {sec} sec"
+        return f"{minutes}:{sec:02d}"
+
+    # Print average times in MM:SS format
+    print("Average Iteration Time Including First Iteration:")
+    print(average_including_first.apply(lambda x: format_seconds(x, add_strings=False)))
+
+    print("\nAverage Iteration Time Excluding First Iteration:")
+    print(average_excluding_first.apply(lambda x: format_seconds(x, add_strings=False)))
+
+    def plot_average(df, title, filename):
+        # Reset index for plotting
+        df = df.reset_index()
+        # Create a combined label for ansatz_type and ansatz_layers
+        df['group'] = df['ansatz_type'] + ", Layers: " + df['ansatz_layers'].astype(str)
+
+        # Define a formatter for the y-axis
+        def seconds_to_mmss(x, _):
+            return format_seconds(x, add_strings=False)
+
+        # Plot the data
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+
+        sns.lineplot(
+            data=df,
+            x='nodes',
+            y='iteration_time',
+            hue='group',
+            marker='o',
+            ax=ax1
+        )
+        ax1.set_ylabel("Average Iteration Time (MM:SS)")
+        ax1.set_xlabel("Number of Qubits (nodes)")
+        ax1.legend(title="Ansatz Type and Layers")
+        ax1.grid(True)
+
+        # Apply the custom formatter to the y-axis
+        ax1.yaxis.set_major_formatter(plt.FuncFormatter(seconds_to_mmss))
+
+        # Adjust title and save the plot
+        plt.title(title)
+        save_path = os.path.join(experiment_folder, filename)
+        plt.savefig(save_path, bbox_inches="tight")
+        plt.close()
+        print(f"Saved plot to {save_path}")
+
+    # Plot for averages including the first iteration
+    plot_average(
+        average_including_first,
+        "Average Iteration Time (Including First Iteration) vs Number of Qubits",
+        "avg_iter_time_including_first.png"
+    )
+
+    # Plot for averages excluding the first iteration
+    plot_average(
+        average_excluding_first,
+        "Average Iteration Time (Excluding First Iteration) vs Number of Qubits",
+        "avg_iter_time_excluding_first.png"
+    )

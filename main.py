@@ -5,7 +5,7 @@ import numpy as np
 
 from max_cut import generate_graph_from_config, run_vqe_for_max_cut
 from plotting import plot_metrics_across_run_from_csv, plot_energy_history_from_csv, read_all_runs, extract_metrics, \
-    plot_metrics_with_grouping, plot_expressibility_entanglement
+    plot_metrics_with_grouping, plot_expressibility_entanglement, plot_average_iteration_time
 from util import load_config, log_vqe_results, generate_deterministic_seeds, create_run_folder, \
     create_experiment_folder
 
@@ -96,20 +96,20 @@ def run_single_experiment(config, logging, plotting, run_folder):
 if __name__ == '__main__':
     problem_type = "max_cut"
     config_name = "fully_connected"
-    experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=False)
-    # experiment_path = "results/Experiment_8"
+    # experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=False)
+    experiment_path = "results/Experiment_1"
 
     # parameter_column = ['ansatz_layers','dropout_ratio', 'param_theta']  # ansatz_layers, dropout_ratio, param_theta
 
-    # combined_df = read_all_runs(config_name, experiment_ids = [8])
-    # metrics_df = extract_metrics(combined_df)
+    combined_df = read_all_runs(config_name, experiment_ids = [1])
+    metrics_df = extract_metrics(combined_df)
     # plot_average_metrics(metrics_df, parameter_column, experiment_path)
     # plot_approximation_vs_entanglement(metrics_df, experiment_path)
     # plot_metrics_with_dropout(metrics_df, parameter_column='ansatz_layers', group_column='dropout_ratio', experiment_folder=experiment_path)
 
     # plot_metrics_with_grouping(
     #     metrics_df=metrics_df.drop(columns=['entangling_capability', 'expressibility']),
-    #     parameter_column='dropout_ratio',      # x axis
+    #     parameter_column='ansatz_layers',      # x axis
     #     group_column='ansatz_type',            # Grouping by ansatz type
     #     metrics_to_plot=['approximation_ratio'],
     #     experiment_folder=experiment_path
@@ -117,7 +117,9 @@ if __name__ == '__main__':
 
     # plot_expressibility_entanglement(
     #     metrics_df=metrics_df,
-    #     x_column='dropout_ratio',      # Parameter to vary on the x-axis: ansatz_layers, dropout_ratio, param_theta
+    #     x_column='ansatz_layers',      # Parameter to vary on the x-axis: ansatz_layers, dropout_ratio, param_theta
     #     group_column='ansatz_type',   # Grouping by ansatz type or other variables
     #     experiment_folder=experiment_path  # Path to save the plots
     # )
+
+    plot_average_iteration_time(metrics_df, experiment_path)
