@@ -1,17 +1,8 @@
-import time
-
 import networkx as nx
-import os
 import numpy as np
 import itertools
 
 from qiskit_optimization.applications import Maxcut
-
-from eval import calculate_cut_cost, get_probabilities, calculate_entanglement_metrics, compute_expressibility, \
-    entanglement_capability
-from util import Result, generate_qpic_circuit
-from vqe import create_vqe
-
 
 def brute_force_max_cut(graph):
     """Brute-force method to find the optimal Max-Cut value for a given graph."""
@@ -31,122 +22,13 @@ def brute_force_max_cut(graph):
 
     return max_cut_value
 
-
-def run_vqe_for_max_cut(g, config, seed, num_iteration):
-    """Solve the MaxCut problem on a given NetworkX graph using VQE."""
-    # print("Starting VQE optimization for MAX-CUT problem")
-    start_time = time.time()
-    qubits = g.number_of_nodes()
-    hamiltonian, offset = get_hamiltonian(g)
-
-    global_energy_history = []
-    ansatz, assigned_parameters, vqe = create_vqe(config, qubits, global_energy_history, num_iteration)
-
-    # calculate pre-training metrics and plot ansatz
-    expressibility_score = None
-    entangling_capability = None
-    directory = "ansätze"
-
-    if num_iteration == 0:
-        ansatz_type = config['vqe_parameters']['ansatz_type']
-        ansatz_layers = config['vqe_parameters']['ansatz_layers']
-        entangle_method = config['vqe_parameters']['entangle_method']
-        if config['eval']['ent_cap']:
-            entangling_capability = entanglement_capability(ansatz)
-
-        if config['eval']['qpic']:
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-
-            # Generate QPIC filename
-            qpic_filename = f"{directory}/{ansatz_type}.qpic"
-
-            # Generate QPIC file
-            if not os.path.exists(qpic_filename):
-                qpic_str = generate_qpic_circuit(ansatz)
-                with open(qpic_filename, 'w', encoding='utf-8') as file:
-                    file.write(qpic_str)
-                print(f"Generated QPIC file for ansatz: {qpic_filename}")
-            else:
-                print(f"QPIC file already exists: {qpic_filename}")
-
-        if config['eval']['expressibility']:
-            # Determine the suffix based on the entangle method
-            if entangle_method == 'dropout':
-                suffix = f"d{config['vqe_parameters']['dropout_ratio']}"
-            elif entangle_method == 'parametrize':
-                param_theta = config['vqe_parameters']['param_theta']
-
-                if 'pi' in param_theta:
-                    # Extract everything after 'pi' (e.g., "/2" or "/4") and replace "/" with "_"
-                    pi_part = param_theta.split('pi')[1].strip()  # Gets the part after 'pi'
-                    sanitized_theta = f"pi{pi_part.replace('/', '_')}" if pi_part else "pi"
-                else:
-                    # If 'pi' is not in the string, keep the original value as the suffix
-                    sanitized_theta = param_theta.replace("/", "_")
-                suffix = f"p{sanitized_theta}"
-
-            else:
-                suffix = ""
-
-            # Construct the expressibility filename
-            expressibility_filename = f"{directory}/{ansatz_type}_{ansatz_layers}_{suffix}".strip("_")
-
-            # Check if the file already exists
-            if not os.path.exists(os.path.join(expressibility_filename, "_expressibility.png")):
-                expressibility_score = compute_expressibility(ansatz, expressibility_filename, plot_expressibility=config['eval']['expr_plot'])
-                print(f"Generated expressibility graph: {expressibility_filename}")
-            else:
-                print(f"Expressibility graph already exists: {expressibility_filename}")
-
-    # Run optimization
-    vqe_result = vqe.compute_minimum_eigenvalue(hamiltonian)
-    optimized_ansatz = ansatz.assign_parameters(vqe_result.optimal_parameters)
-
-    probabilities = get_probabilities(optimized_ansatz)
-
-    entanglement_metrics = calculate_entanglement_metrics(optimized_ansatz, probabilities)
-    entanglement_metrics['expressibility'] = expressibility_score
-    entanglement_metrics['entangling_capability'] = entangling_capability
-
-    print(entanglement_metrics)
-
-    solution = max(probabilities.items(), key=lambda x: x[1])
-    bitstring_solution = solution[0]
-    cut_cost = calculate_cut_cost(g, bitstring_solution)
-    optimal_cut_value = brute_force_max_cut(g)
-
-    end_time = time.time()
-    iteration_time = start_time - end_time
-    print(iteration_time)
-    # Log results to CSV
-    result = Result(
-        graph_edges=list(g.edges()),
-        optimal_value=vqe_result.optimal_value,
-        distribution=probabilities,
-        solution=solution,
-        cut_cost=cut_cost,
-        brute_forced_cost=optimal_cut_value,
-        entanglement_metrics=entanglement_metrics,
-        energy_history=global_energy_history,
-        seed=seed,
-        iter_time=iteration_time
-    )
-    result.compute_cut_cost_difference()
-    result.compute_approximation_ratio()
-    print(f"approx. ratio: {result.approximation_ratio}")
-    return result
-
-
 def get_hamiltonian(nxgraph):
     """Generate the Hamiltonian for the MaxCut problem."""
     maxcut = Maxcut(nxgraph)
     quadratic = maxcut.to_quadratic_program()
     return quadratic.to_ising()
 
-
 ##################
-
 
 def generate_graph_from_config(config):
     """Generate the graph based on the configuration."""

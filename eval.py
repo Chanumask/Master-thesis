@@ -11,6 +11,7 @@ from scipy.stats import entropy as scipy_entropy
 from matplotlib import pyplot as plt
 
 from plotting import plot_expressibility_entanglement
+from util import generate_qpic_circuit
 
 
 def run_circuit(circuit, shots=1024):
@@ -76,6 +77,66 @@ def get_probabilities(circuit, shots=1024):
         probs = {k: v / total_prob for k, v in probs.items()}
 
     return probs
+
+def calculate_ansatz_metrics(ansatz, config):
+    """If specified in the config this calculates expressibility and entangling capability as well as generating a qpic file to illustrate the ansatz"""
+    directory = "ansätze"
+    ansatz_type = config['vqe_parameters']['ansatz_type']
+    ansatz_layers = config['vqe_parameters']['ansatz_layers']
+    entangle_method = config['vqe_parameters']['entangle_method']
+    expressibility_score = None
+    entangling_capability_score = None
+
+    if config['eval']['ent_cap']:
+        entangling_capability_score = entanglement_capability(ansatz)
+
+    if config['eval']['qpic']:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        # Generate QPIC filename
+        qpic_filename = f"{directory}/{ansatz_type}.qpic"
+
+        # Generate QPIC file
+        if not os.path.exists(qpic_filename):
+            qpic_str = generate_qpic_circuit(ansatz)
+            with open(qpic_filename, 'w', encoding='utf-8') as file:
+                file.write(qpic_str)
+            print(f"Generated QPIC file for ansatz: {qpic_filename}")
+        else:
+            print(f"QPIC file already exists: {qpic_filename}")
+
+    if config['eval']['expressibility']:
+        # Determine the suffix based on the entangle method
+        if entangle_method == 'dropout':
+            suffix = f"d{config['vqe_parameters']['dropout_ratio']}"
+        elif entangle_method == 'parametrize':
+            param_theta = config['vqe_parameters']['param_theta']
+
+            if 'pi' in param_theta:
+                # Extract everything after 'pi' (e.g., "/2" or "/4") and replace "/" with "_"
+                pi_part = param_theta.split('pi')[1].strip()  # Gets the part after 'pi'
+                sanitized_theta = f"pi{pi_part.replace('/', '_')}" if pi_part else "pi"
+            else:
+                # If 'pi' is not in the string, keep the original value as the suffix
+                sanitized_theta = param_theta.replace("/", "_")
+            suffix = f"p{sanitized_theta}"
+
+        else:
+            suffix = ""
+
+        # Construct the expressibility filename
+        expressibility_filename = f"{directory}/{ansatz_type}_{ansatz_layers}_{suffix}".strip("_")
+
+        # Check if the file already exists
+        if not os.path.exists(os.path.join(expressibility_filename, "_expressibility.png")):
+            expressibility_score = compute_expressibility(ansatz, expressibility_filename,
+                                                          plot_expressibility=config['eval']['expr_plot'])
+            print(f"Generated expressibility graph: {expressibility_filename}")
+        else:
+            print(f"Expressibility graph already exists: {expressibility_filename}")
+
+    return {"expressibility": expressibility_score, "entangling_capability": entangling_capability_score}
 
 
 def calculate_entanglement_metrics(circuit, probabilities):

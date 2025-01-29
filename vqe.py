@@ -1,37 +1,35 @@
+import time
+
 import numpy as np
 from qiskit import QuantumCircuit
 from qiskit.circuit import Parameter
-
-from qiskit_algorithms.minimum_eigensolvers import VQE
+from qiskit.circuit.library import CRXGate
 from qiskit.primitives import Estimator
+from qiskit_algorithms.minimum_eigensolvers import VQE
 from qiskit_algorithms.optimizers import COBYLA, SPSA, NELDER_MEAD
 
-global_energy_history = []
+from eval import calculate_cut_cost, get_probabilities, calculate_entanglement_metrics, calculate_ansatz_metrics
+from max_cut import get_hamiltonian, brute_force_max_cut
+from util import Result
 
 
-def create_hea(num_qubits, depth, ansatz_id, ent_gate='cx'):
+def create_hea(num_qubits, depth, ansatz_id):
+    """
+    Creates the ansatz specified by id and returns the ansatz and a set of random parameter but doesn't assign them yet.
+    """
     circuit = QuantumCircuit(num_qubits)
-
-    def add_entangling_gate(circ, control, target):
-        if ent_gate == 'cx':
-            circ.cx(control, target)
-        elif ent_gate == 'cz':
-            circ.cz(control, target)
-        else:
-            raise ValueError("ent_gate must be 'cx' or 'cz'.")
 
     if ansatz_id == 1:
         # Ansatz 1: single rotational gate RY ansatz
-        theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(2 * depth)]
+        theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(depth)]
 
         for d in range(depth):
             for i in range(num_qubits):
-                theta_ry = theta_list[2 * i + 2 * num_qubits * d]
-                circuit.ry(theta_ry, i)
+                circuit.ry(theta_list[i + num_qubits * d], i)
 
-            for i in range(num_qubits - 1):
-                add_entangling_gate(circuit, i, i + 1)
-            add_entangling_gate(circuit, num_qubits - 1, 0)
+        for i in range(num_qubits - 1):
+            circuit.cx(i, i + 1)
+        circuit.cx(num_qubits - 1, 0)
 
     elif ansatz_id == 2:
         # Ansatz 2: double rotational ansatz RYRX ansatz from Sim et. al and found in many other papers (high expr.)
@@ -39,15 +37,14 @@ def create_hea(num_qubits, depth, ansatz_id, ent_gate='cx'):
 
         for d in range(depth):
             for i in range(num_qubits):
-                theta_ry = theta_list[2 * i + 2 * num_qubits * d]
-                circuit.ry(theta_ry, i)
-            for i in range(num_qubits):
-                theta_rx = theta_list[2 * i + 1 + 2 * num_qubits * d]
-                circuit.rx(theta_rx, i)
+                circuit.ry(theta_list[2 * i + 2 * num_qubits * d], i)
+                circuit.rx(theta_list[2 * i + 1 + 2 * num_qubits * d], i)
+
+            circuit.barrier()
 
             for i in range(num_qubits - 1):
-                add_entangling_gate(circuit, i, i + 1)
-            add_entangling_gate(circuit, num_qubits - 1, 0)
+                circuit.cx(i, i + 1)
+            circuit.cx(num_qubits - 1, 0)
 
 
     elif ansatz_id == 3:
@@ -56,94 +53,21 @@ def create_hea(num_qubits, depth, ansatz_id, ent_gate='cx'):
 
         for d in range(depth):
             for i in range(num_qubits):
-                theta_ry = theta_list[i + num_qubits * d]
-                circuit.ry(theta_ry, i)
+                circuit.ry(theta_list[i + num_qubits * d], i)
+            circuit.barrier()
+
             if d % 2 == 0:
-                # Even layers
                 for i in range(0, num_qubits - 1, 2):
-                    add_entangling_gate(circuit, i, i + 1)
+                    circuit.cx(i, i + 1)
             else:
-                # Odd layers
                 for i in range(1, num_qubits - 1, 2):
-                    add_entangling_gate(circuit, i, i + 1)
-                add_entangling_gate(circuit, num_qubits - 1, 0)
+                    circuit.cx(i, i + 1)
+                circuit.cx(num_qubits - 1, 0)
     else:
         raise ValueError("Invalid ansatz_id. Supported ids are 1 and 2.")
 
     random_params = np.random.uniform(-0.001, 0.001, len(theta_list))
-    # circuit = circuit.assign_parameters({param: value for param, value in zip(theta_list, random_params)})
     return circuit, random_params
-
-
-def create_test_ansatz(num_qubits, depth=2):
-    circuit = QuantumCircuit(num_qubits)
-
-    # Create parameters
-    theta = [[Parameter(f"θ_{i}_{j}") for j in range(2)] for i in range(num_qubits)]
-
-    # Add parametrized rotation gates and entanglement
-    for d in range(depth):
-        for i in range(num_qubits):
-            circuit.ry(theta[i][0], i)
-            circuit.rz(theta[i][1], i)
-            circuit.x(i)
-
-    # Add entangling CNOT gates between adjacent qubits
-    for i in range(num_qubits - 1):
-        circuit.cx(i, i + 1)
-    print(circuit.draw())
-    return circuit
-
-
-def create_vqe(config, qubits, energy_history, num_iteration):
-    ansatz_depth = config['vqe_parameters']['ansatz_layers']
-    ansatz_type = config['vqe_parameters']['ansatz_type']
-
-    entangle_method = config['vqe_parameters'].get('entangle_method', 'dropout')
-    dropout_ratio = config['vqe_parameters']['dropout_ratio']
-    param_theta = config['vqe_parameters'].get('param_theta', np.pi / 2)  # Default parameter for parametric entangling
-
-    optimizer_choice = config['vqe_parameters'].get('optimizer', 'COBYLA')
-
-    # Ansatz selection
-    if ansatz_type.startswith('HEA'):
-        try:
-            ansatz_id = int(ansatz_type.split('_')[-1])
-            ansatz, assigned_params = create_hea(qubits, ansatz_depth, ansatz_id)
-        except (ValueError, IndexError):
-            raise ValueError(f"Invalid HEA ansatz type format: {ansatz_type}. Expected format: 'HEA_<int>'")
-    else:
-        raise ValueError(f"Unsupported ansatz type: {ansatz_type}")
-
-    # Entanglement customization
-    if entangle_method == 'dropout':
-        ansatz = apply_dropout(ansatz, dropout_ratio)
-    elif entangle_method == 'parametrize':
-        ansatz = apply_parametric_entangling(ansatz, param_theta)  # Apply parameterized CZ with theta
-    elif entangle_method == 'none':
-        pass
-    else:
-        raise ValueError(f"Unsupported entangle method: {entangle_method}")
-
-    estimator = Estimator()
-
-    # Select the optimizer
-    if optimizer_choice == 'COBYLA':
-        optimizer = COBYLA()
-    elif optimizer_choice == 'SPSA':
-        optimizer = SPSA()
-    elif optimizer_choice == 'NELDER_MEAD':
-        optimizer = NELDER_MEAD()
-    else:
-        raise ValueError(f"Unsupported optimizer: {optimizer_choice}")
-
-    def vqe_callback(eval_count, params, energy, metadata):
-        if eval_count % 10 == 0:
-            energy_history.append(float(round(energy, 4)))
-
-    vqe = VQE(estimator, ansatz, optimizer, callback=vqe_callback)
-
-    return ansatz, assigned_params, vqe
 
 
 def apply_dropout(circuit, dropout_rate):
@@ -157,59 +81,156 @@ def apply_dropout(circuit, dropout_rate):
     Returns:
         QuantumCircuit: A modified quantum circuit with dropout applied to entangling gates.
     """
-    modified_circuit = QuantumCircuit(circuit.num_qubits)
+    # initial_cx_count = sum(1 for inst, _, _ in circuit.data if inst.name == 'cx')
+    # print(circuit.draw())
 
-    for instruction, qubits, clbits in circuit.data:
+    keep_gate = np.random.rand(len(circuit.data)) >= dropout_rate
 
-        if instruction.name in ['cz', 'cx']:
-            if np.random.rand() >= dropout_rate:
-                modified_circuit.append(instruction, [q._index for q in qubits])
-        else:
-            modified_circuit.append(instruction, [q._index for q in qubits])
-
-    return modified_circuit
+    circuit.data = [
+        (inst, qargs, cargs) for (inst, qargs, cargs), keep in zip(circuit.data, keep_gate)
+        if keep or inst.name not in ['cx']
+    ]
+    # final_cx_count = sum(1 for inst, _, _ in circuit.data if inst.name == 'cx')
+    # print(f"\nDropout Rate: {dropout_rate}")
+    # print(f"CX Gates Removed: {initial_cx_count - final_cx_count} / {initial_cx_count}")
+    # print("\nModified Circuit:")
+    # print(circuit.draw())
+    return circuit
 
 
 def apply_parametric_entangling(circuit, theta_value):
     """
-    Replaces CZ gates with parametrized Controlled-Z gates (and cx with crx respectively)
-    to control entanglement strength.
+    Replaces CX gates with parametrized CRX gates to control entanglement strength.
 
     Args:
-        circuit (QuantumCircuit): The input ansatz circuit to be modified.
-        theta_value (float): The phase angle for the parametrized CZ gate (0 <= theta <= pi).
+        circuit (QuantumCircuit): The input ansatz circuit (modified in-place).
+        theta_value (str or float): The rotation angle for the parametrized CRX gate.
 
     Returns:
-        QuantumCircuit: A modified quantum circuit with parametrized entangling gates.
+        QuantumCircuit: The modified quantum circuit.
     """
-    modified_circuit = QuantumCircuit(circuit.num_qubits)
-    theta_value = eval(theta_value)
+    # Convert theta_value safely
+    if isinstance(theta_value, str):
+        try:
+            theta_value = eval(theta_value, {"np": np})  # Safe eval with restricted namespace
+        except Exception:
+            raise ValueError(f"Invalid theta_value: {theta_value}. Must be a valid numerical expression.")
 
-    for instruction, qubits, clbits in circuit.data:
-        if instruction.name == 'cz':
-            modified_circuit.crz(theta_value, qubits[0]._index, qubits[1]._index)
-        elif instruction.name == 'cx':
-            modified_circuit.crx(theta_value, qubits[0]._index, qubits[1]._index)
+    theta_value = float(theta_value)
+
+
+    # print("\nOriginal Circuit:")
+    # print(circuit.draw())
+
+    new_data = []
+    for inst, qargs, cargs in circuit.data:
+        if inst.name == 'cx':
+            sign = np.random.choice([-1, 1])  # Randomly choose ±θ
+            crx_gate = CRXGate(sign * theta_value)  # Create a CRX gate
+            new_data.append((crx_gate, qargs, cargs))
         else:
-            modified_circuit.append(instruction, [q._index for q in qubits])
+            new_data.append((inst, qargs, cargs))
 
-    return modified_circuit
+    # Replace circuit data with modified version
+    circuit.data = new_data
+
+    # print(f"\nTheta Value: {theta_value}")
+    # print("\nModified Circuit:")
+    # print(circuit.draw())
+
+    return circuit
 
 
-def add_cyclic_entanglement(circuit, dropout_ratio):
-    """Add cyclic entanglement using CX gates at the beginning of the circuit."""
-    num_qubits = circuit.num_qubits
-    num_entanglements = int(dropout_ratio * num_qubits)
+def create_vqe(config, qubits, energy_history, num_iteration):
+    ansatz_depth = config['vqe_parameters']['ansatz_layers']
+    ansatz_type = config['vqe_parameters']['ansatz_type']
 
-    # Randomly select pairs to entangle from a cyclic list
-    all_pairs = [(i, (i + 1) % num_qubits) for i in range(num_qubits)]
-    selected_pairs = np.random.choice(len(all_pairs), num_entanglements, replace=False)
+    entangle_method = config['vqe_parameters']['entangle_method']
+    dropout_ratio = config['vqe_parameters']['dropout_ratio']
+    param_theta = config['vqe_parameters']['param_theta']
 
-    # Add entanglement gates to circuit based on selected pairs
-    entanglements_added = 0
-    for index in selected_pairs:
-        qubit1, qubit2 = all_pairs[index]
-        circuit.cx(qubit1, qubit2)
-        entanglements_added += 1
+    optimizer_choice = config['vqe_parameters']['optimizer']
 
-    return circuit, entanglements_added
+    # Ansatz selection
+    if ansatz_type.startswith('HEA'):
+        ansatz_id = int(ansatz_type.split('_')[-1])
+        ansatz, random_params = create_hea(qubits, ansatz_depth, ansatz_id)
+    else:
+        raise ValueError(f"Unsupported ansatz type: {ansatz_type}")
+
+    # Entanglement customization
+    if entangle_method == 'dropout':
+        ansatz = apply_dropout(ansatz, dropout_ratio)
+    elif entangle_method == 'parametrize':
+        ansatz = apply_parametric_entangling(ansatz, param_theta)
+    elif entangle_method == 'none':
+        pass
+    else:
+        raise ValueError(f"Unsupported entangle method: {entangle_method}")
+
+    # Select the optimizer
+    optimizer_mapping = {'COBYLA': COBYLA(), 'SPSA': SPSA(), 'NELDER_MEAD': NELDER_MEAD()}
+    optimizer = optimizer_mapping.get(optimizer_choice)
+    if optimizer is None:
+        raise ValueError(f"Unsupported optimizer: {optimizer_choice}")
+
+    estimator = Estimator()
+
+
+    def vqe_callback(eval_count, params, energy, metadata):
+        if eval_count % 10 == 0:
+            energy_history.append(float(round(energy, 4)))
+
+    vqe = VQE(estimator, ansatz, optimizer, callback=vqe_callback)
+
+    return ansatz, random_params, vqe
+
+def run_vqe_for_max_cut(g, config, seed, num_iteration):
+    """Solve the MaxCut problem on a given NetworkX graph using VQE."""
+    start_time = time.time()
+
+    qubits = g.number_of_nodes()
+    hamiltonian, offset = get_hamiltonian(g)
+    energy_history = []
+
+    ansatz, random_params, vqe = create_vqe(config, qubits, energy_history, num_iteration)
+
+    # calculate expressibility and entangling capability only in the first iteration
+    pre_training_metrics = {}
+    if num_iteration == 0:
+        pre_training_metrics = calculate_ansatz_metrics(ansatz, config)
+
+    # Run optimization
+    vqe_result = vqe.compute_minimum_eigenvalue(hamiltonian)
+    optimized_ansatz = ansatz.assign_parameters(vqe_result.optimal_parameters)
+
+    probabilities = get_probabilities(optimized_ansatz)
+
+    entanglement_metrics = calculate_entanglement_metrics(optimized_ansatz, probabilities)
+    entanglement_metrics.update(pre_training_metrics)
+
+    print(entanglement_metrics)
+
+    solution = max(probabilities.items(), key=lambda x: x[1])[0]
+    cut_cost = calculate_cut_cost(g, solution)
+    optimal_cut_value = brute_force_max_cut(g)
+
+    iteration_time = time.time() - start_time
+
+    result = Result(
+        graph_edges=list(g.edges()),
+        optimal_value=vqe_result.optimal_value,
+        distribution=probabilities,
+        solution=solution,
+        cut_cost=cut_cost,
+        brute_forced_cost=optimal_cut_value,
+        entanglement_metrics=entanglement_metrics,
+        energy_history=energy_history,
+        seed=seed,
+        iter_time=iteration_time
+    )
+    result.compute_cut_cost_difference()
+    result.compute_approximation_ratio()
+
+    print(f"approx. ratio: {result.approximation_ratio}")
+    return result

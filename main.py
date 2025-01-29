@@ -3,7 +3,8 @@ from itertools import product
 
 import numpy as np
 
-from max_cut import generate_graph_from_config, run_vqe_for_max_cut
+from max_cut import generate_graph_from_config
+from vqe import run_vqe_for_max_cut
 from plotting import plot_metrics_across_run_from_csv, plot_energy_history_from_csv, read_all_runs, extract_metrics, \
     plot_metrics_with_grouping, plot_expressibility_entanglement, plot_average_iteration_time
 from util import load_config, log_vqe_results, generate_deterministic_seeds, create_run_folder, \
@@ -96,8 +97,8 @@ def run_single_experiment(config, logging, plotting, run_folder):
 if __name__ == '__main__':
     problem_type = "max_cut"
     config_name = "fully_connected"
-    # experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=False)
-    experiment_path = "results/Experiment_1"
+    experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=True)
+    # experiment_path = "results/Experiment_1"
 
     # parameter_column = ['ansatz_layers','dropout_ratio', 'param_theta']  # ansatz_layers, dropout_ratio, param_theta
 
@@ -122,4 +123,4 @@ if __name__ == '__main__':
     #     experiment_folder=experiment_path  # Path to save the plots
     # )
 
-    plot_average_iteration_time(metrics_df, experiment_path)
+    # plot_average_iteration_time(metrics_df, experiment_path)
