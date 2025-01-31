@@ -8,7 +8,7 @@ from qiskit.primitives import Estimator
 from qiskit_algorithms.minimum_eigensolvers import VQE
 from qiskit_algorithms.optimizers import COBYLA, SPSA, NELDER_MEAD
 
-from eval import calculate_cut_cost, get_probabilities, calculate_entanglement_metrics, calculate_ansatz_metrics
+from eval import calculate_cut_cost, get_probabilities, calculate_ansatz_metrics
 from max_cut import get_hamiltonian, brute_force_max_cut
 from util import Result
 
@@ -196,18 +196,15 @@ def run_vqe_for_max_cut(g, config, seed, num_iteration):
     ansatz, random_params, vqe = create_vqe(config, qubits, energy_history, num_iteration)
 
     # calculate expressibility and entangling capability only in the first iteration
-    pre_training_metrics = {}
+    entanglement_metrics = {}
     if num_iteration == 0:
-        pre_training_metrics = calculate_ansatz_metrics(ansatz, config)
+        entanglement_metrics = calculate_ansatz_metrics(ansatz, config)
 
     # Run optimization
     vqe_result = vqe.compute_minimum_eigenvalue(hamiltonian)
     optimized_ansatz = ansatz.assign_parameters(vqe_result.optimal_parameters)
 
     probabilities = get_probabilities(optimized_ansatz)
-
-    entanglement_metrics = calculate_entanglement_metrics(optimized_ansatz, probabilities)
-    entanglement_metrics.update(pre_training_metrics)
 
     print(entanglement_metrics)
 

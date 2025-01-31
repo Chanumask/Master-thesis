@@ -20,11 +20,12 @@ def run_circuit(circuit, shots=1024):
         # Add measurement gates if not present
         circuit = circuit.copy()
         circuit.measure_all()
+
     simulator = AerSimulator()
+    transpiled_circuit = transpile(circuit, simulator)  # Pre-transpile once
     simulator.set_options(seed_simulator=1)
-    result = simulator.run(transpile(circuit, simulator), shots=shots).result()
-    counts = result.get_counts(circuit)
-    return counts
+    result = simulator.run(transpiled_circuit, shots=shots).result()
+    return result.get_counts()
 
 
 def simulate_statevector(circuit: QuantumCircuit):
@@ -138,65 +139,6 @@ def calculate_ansatz_metrics(ansatz, config):
 
     return {"expressibility": expressibility_score, "entangling_capability": entangling_capability_score}
 
-
-def calculate_entanglement_metrics(circuit, probabilities):
-    """
-    Calculate entanglement metrics of the optimized circuit using the given probabilities.
-
-    Args:
-        circuit (QuantumCircuit): The quantum circuit analyzed.
-        probabilities (dict): Probability distribution of measured bit strings
-
-    Returns:
-        dict: A dictionary containing the entanglement metrics.
-    """
-    num_qubits = circuit.num_qubits
-    dim = 2 ** num_qubits
-
-    # Build density matrix from probabilities
-    density_matrix = np.zeros((dim, dim), dtype=complex)
-    for bitstring, prob in probabilities.items():
-        index = int(bitstring, 2)
-        density_matrix[index, index] = prob
-    rho = DensityMatrix(density_matrix)
-
-    # Check if it's a valid probability distribution
-    diag_probs = np.diag(rho.data).real
-    if not np.isclose(np.sum(diag_probs), 1):
-        raise ValueError("Invalid probability distribution")
-
-    # Entanlement per Qubit (von Neumann Entropy)
-    # https://journals.aps.org/prxquantum/pdf/10.1103/PRXQuantum.3.040339
-    # https://journals.aps.org/pra/pdf/10.1103/PhysRevA.109.032413
-    entropies = []
-    for i in range(num_qubits):
-        # Partial trace over the other qubits to get the reduced density matrix for qubit i
-        partial_rho = partial_trace(rho, [j for j in range(num_qubits) if j != i])
-        partial_probabilities = np.diag(partial_rho.data).real
-        entropies.append(scipy_entropy(partial_probabilities))
-    average_entanglement_per_qubit = np.mean(entropies)
-
-    # Meyer-Wallach Measure  http://arxiv.org/abs/1905.10876
-    traces = []
-    for i in range(num_qubits):
-        # Partial trace over other qubits to get rho_k
-        rest = [j for j in range(num_qubits) if j != i]
-        rho_k = partial_trace(rho, rest)
-        # Compute Tr[rho_k^2]
-        rho_k_matrix = rho_k.data
-        trace_rho_k_squared = np.trace(rho_k_matrix @ rho_k_matrix)
-        traces.append(trace_rho_k_squared.real)
-
-    # Compute Q
-    average_trace = np.mean(traces)
-    meyer_wallach = 2 * (1 - average_trace)
-
-    metrics = {
-        'e_per_qubit': average_entanglement_per_qubit,
-        'meyer_wallach': meyer_wallach
-    }
-
-    return metrics
 
 def entanglement_capability(ansatz, num_samples=1000, measure="meyer-wallach"):
     """
@@ -337,3 +279,62 @@ def calculate_fidelity_from_counts(counts_1, counts_2, shots):
     fidelity = sum(np.sqrt(probs_1.get(key, 0) * probs_2.get(key, 0)) for key in keys)
 
     return fidelity
+
+# def calculate_entanglement_metrics(circuit, probabilities):
+#     """
+#     Calculate entanglement metrics of the optimized circuit using the given probabilities.
+#
+#     Args:
+#         circuit (QuantumCircuit): The quantum circuit analyzed.
+#         probabilities (dict): Probability distribution of measured bit strings
+#
+#     Returns:
+#         dict: A dictionary containing the entanglement metrics.
+#     """
+#     num_qubits = circuit.num_qubits
+#     dim = 2 ** num_qubits
+#
+#     # Build density matrix from probabilities
+#     density_matrix = np.zeros((dim, dim), dtype=complex)
+#     for bitstring, prob in probabilities.items():
+#         index = int(bitstring, 2)
+#         density_matrix[index, index] = prob
+#     rho = DensityMatrix(density_matrix)
+#
+#     # Check if it's a valid probability distribution
+#     diag_probs = np.diag(rho.data).real
+#     if not np.isclose(np.sum(diag_probs), 1):
+#         raise ValueError("Invalid probability distribution")
+#
+#     # Entanlement per Qubit (von Neumann Entropy)
+#     # https://journals.aps.org/prxquantum/pdf/10.1103/PRXQuantum.3.040339
+#     # https://journals.aps.org/pra/pdf/10.1103/PhysRevA.109.032413
+#     entropies = []
+#     for i in range(num_qubits):
+#         # Partial trace over the other qubits to get the reduced density matrix for qubit i
+#         partial_rho = partial_trace(rho, [j for j in range(num_qubits) if j != i])
+#         partial_probabilities = np.diag(partial_rho.data).real
+#         entropies.append(scipy_entropy(partial_probabilities))
+#     average_entanglement_per_qubit = np.mean(entropies)
+#
+#     # Meyer-Wallach Measure  http://arxiv.org/abs/1905.10876
+#     traces = []
+#     for i in range(num_qubits):
+#         # Partial trace over other qubits to get rho_k
+#         rest = [j for j in range(num_qubits) if j != i]
+#         rho_k = partial_trace(rho, rest)
+#         # Compute Tr[rho_k^2]
+#         rho_k_matrix = rho_k.data
+#         trace_rho_k_squared = np.trace(rho_k_matrix @ rho_k_matrix)
+#         traces.append(trace_rho_k_squared.real)
+#
+#     # Compute Q
+#     average_trace = np.mean(traces)
+#     meyer_wallach = 2 * (1 - average_trace)
+#
+#     metrics = {
+#         'e_per_qubit': average_entanglement_per_qubit,
+#         'meyer_wallach': meyer_wallach
+#     }
+#
+#     return metrics

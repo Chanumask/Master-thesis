@@ -9,15 +9,10 @@ from dataclasses import dataclass, field, asdict
 
 def generate_deterministic_seeds(base_seed, num_seeds):
     """Generate a list of deterministic seeds."""
-    rng = np.random.default_rng(base_seed)
-    return [rng.integers(0, 10000) for _ in range(num_seeds)]
-
+    return np.random.default_rng(base_seed).integers(0, 10000, size=num_seeds).tolist()
 
 def create_experiment_folder(base_dir="results"):
-    """
-    Create a new experiment folder in the result directory.
-    Returns the path of the created experiment folder.
-    """
+    """Create a new experiment folder inside the results directory."""
     # Determine the next available Experiment_<index> folder
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
