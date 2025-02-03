@@ -20,7 +20,7 @@ def create_hea(num_qubits, depth, ansatz_id):
     circuit = QuantumCircuit(num_qubits)
 
     if ansatz_id == 1:
-        # Ansatz 1: single rotational gate RY ansatz
+        # Ansatz 1: single rotational gate RY ansatz (eg. Rohe et al)
         theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(depth)]
 
         for d in range(depth):
@@ -64,7 +64,7 @@ def create_hea(num_qubits, depth, ansatz_id):
                     circuit.cx(i, i + 1)
                 circuit.cx(num_qubits - 1, 0)
     else:
-        raise ValueError("Invalid ansatz_id. Supported ids are 1 and 2.")
+        raise ValueError("Invalid ansatz_id. Supported ids are 1, 2 and 3.")
 
     random_params = np.random.uniform(-0.001, 0.001, len(theta_list))
     return circuit, random_params
@@ -118,15 +118,15 @@ def apply_parametric_entangling(circuit, theta_value):
 
     theta_value = float(theta_value)
 
-
     # print("\nOriginal Circuit:")
     # print(circuit.draw())
 
     new_data = []
+    lambda_param = Parameter('λ')  # Free parameter for symmetric mapping
     for inst, qargs, cargs in circuit.data:
         if inst.name == 'cx':
-            sign = np.random.choice([-1, 1])  # Randomly choose ±θ
-            crx_gate = CRXGate(sign * theta_value)  # Create a CRX gate
+            symmetric_theta = theta_value * (2 / (1 + (lambda_param ** 2)) - 1)
+            crx_gate = CRXGate(symmetric_theta)
             new_data.append((crx_gate, qargs, cargs))
         else:
             new_data.append((inst, qargs, cargs))
