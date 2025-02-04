@@ -78,8 +78,6 @@ def extract_metrics(data_frame):
         try:
             # Convert string to dictionary
             metrics_data = ast.literal_eval(safe_metrics_str)
-            e_per_qubit_value = metrics_data['e_per_qubit']
-            meyer_wallach_value = metrics_data['meyer_wallach']
             ent_cap = metrics_data['entangling_capability']
             expressibility = metrics_data['expressibility']
         except (ValueError, SyntaxError) as e:
@@ -96,8 +94,6 @@ def extract_metrics(data_frame):
             'ent_gate': ent_gate,
             'dropout_ratio': dropout_ratio,
             'param_theta': param_theta,  # Now numeric if evaluable
-            'e_per_qubit': e_per_qubit_value,
-            'meyer_wallach': meyer_wallach_value,
             'approximation_ratio': approximation_ratio,
             'entangling_capability': ent_cap,
             'expressibility': expressibility,
