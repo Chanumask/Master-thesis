@@ -23,7 +23,8 @@ def read_all_runs(config_name, experiment_ids):
     all_data_frames = []
 
     for experiment_id in experiment_ids:
-        experiment_folder = f"results/Experiment_{experiment_id}"
+
+        experiment_folder = f"FINAL_RESULTS/DROPOUT_STUDY/10_seeds/Experiment_{experiment_id}"
 
         if os.path.exists(experiment_folder):
             # Iterate over all runs within the experiment folder
@@ -75,17 +76,15 @@ def extract_metrics(data_frame):
 
         safe_metrics_str = metrics_str.replace('np.float64', '').replace('(', '').replace(')', '')
         safe_metrics_str = safe_metrics_str.replace('{\'', '{"').replace('\':', '":').replace(', \'', ', "')
-        try:
-            # Convert string to dictionary
-            metrics_data = ast.literal_eval(safe_metrics_str)
-            ent_cap = metrics_data['entangling_capability']
-            expressibility = metrics_data['expressibility']
-        except (ValueError, SyntaxError) as e:
-            print(f"Error parsing metrics: {e}")
-            e_per_qubit_value = None
-            meyer_wallach_value = None
-            ent_cap = None
-            expressibility = None
+        # try:
+        #     # Convert string to dictionary
+        #     metrics_data = ast.literal_eval(safe_metrics_str)
+        #     ent_cap = metrics_data['entangling_capability']
+        #     expressibility = metrics_data['expressibility']
+        # except (ValueError, SyntaxError) as e:
+        #     print(f"Error parsing metrics: {e}")
+        ent_cap = None
+        expressibility = None
 
         metrics_list.append({
             'nodes': nodes,
@@ -102,6 +101,42 @@ def extract_metrics(data_frame):
     metrics_df = pd.DataFrame(metrics_list)
     return metrics_df
 
+
+def read_and_average_experiments(experiment_path, config_name):
+    """
+    Reads all experiments within a directory and averages their metrics.
+
+    Args:
+        experiment_path (str): Path containing all experiment subdirectories (e.g., "FINAL_RESULTS/DROPOUT_STUDY/10_seeds").
+        config_name (str): Configuration name for identifying CSV files.
+
+    Returns:
+        pd.DataFrame: DataFrame containing averaged metrics over all experiments.
+    """
+    all_experiment_ids = []
+
+    # Identify available experiments
+    for folder_name in os.listdir(experiment_path):
+        if folder_name.startswith("Experiment_"):
+            try:
+                experiment_id = int(folder_name.replace("Experiment_", ""))
+                all_experiment_ids.append(experiment_id)
+            except ValueError:
+                continue  # Ignore any malformed directories
+
+    if not all_experiment_ids:
+        raise ValueError(f"No valid experiments found in {experiment_path}")
+
+    # Read data from all experiments
+    combined_df = read_all_runs(config_name, experiment_ids=all_experiment_ids)
+
+    # Extract and aggregate metrics
+    metrics_df = extract_metrics(combined_df)
+
+    # Group by dropout ratio and ansatz type, then average
+    averaged_metrics = metrics_df.groupby(['dropout_ratio', 'ansatz_type']).mean().reset_index()
+
+    return averaged_metrics
 
 
 def plot_average_metrics(metrics_df, parameter_column, experiment_folder):
