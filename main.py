@@ -98,8 +98,8 @@ def run_single_experiment(config, logging, plotting, run_folder):
 if __name__ == '__main__':
     problem_type = "max_cut"
     config_name = "fully_connected"
-    # experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=True)
-    experiment_path = "FINAL_RESULTS/DROPOUT_STUDY/10_seeds/"
+    experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=True)
+    # experiment_path = "FINAL_RESULTS/DROPOUT_STUDY/10_seeds/"
 
     # parameter_column = ['ansatz_layers','dropout_ratio', 'param_theta']  # ansatz_layers, dropout_ratio, param_theta
 
@@ -126,13 +126,13 @@ if __name__ == '__main__':
 
     # plot_average_iteration_time(metrics_df, experiment_path)
 
-    averaged_metrics_df = read_and_average_experiments(experiment_path, config_name)
+    # averaged_metrics_df = read_and_average_experiments(experiment_path, config_name)
 
     # Plot averaged results
-    plot_metrics_with_grouping(
-    metrics_df=averaged_metrics_df.drop(columns=['entangling_capability', 'expressibility']),
-    parameter_column='dropout_ratio',
-    group_column='ansatz_type',
-    metrics_to_plot=['approximation_ratio'],
-    experiment_folder=experiment_path
-    )
+    # plot_metrics_with_grouping(
+    # metrics_df=averaged_metrics_df.drop(columns=['entangling_capability', 'expressibility']),
+    # parameter_column='dropout_ratio',
+    # group_column='ansatz_type',
+    # metrics_to_plot=['approximation_ratio'],
+    # experiment_folder=experiment_path
+    # )
