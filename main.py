@@ -3,11 +3,11 @@ from itertools import product
 
 import numpy as np
 
+from eval import entanglement_capability
 from max_cut import generate_graph_from_config
 from vqe import run_vqe_for_max_cut
 from plotting import plot_metrics_across_run_from_csv, plot_energy_history_from_csv, read_all_runs, extract_metrics, \
-    plot_metrics_with_grouping, plot_expressibility_entanglement, plot_average_iteration_time, \
-    read_and_average_experiments
+    plot_average_iteration_time, read_and_average_experiments, plot_combined_expressibility_entanglement, plot_combined_approximation_ratio
 from util import load_config, log_vqe_results, generate_deterministic_seeds, create_run_folder, \
     create_experiment_folder
 
@@ -98,41 +98,31 @@ def run_single_experiment(config, logging, plotting, run_folder):
 if __name__ == '__main__':
     problem_type = "max_cut"
     config_name = "fully_connected"
-    experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=True)
-    # experiment_path = "FINAL_RESULTS/DROPOUT_STUDY/10_seeds/"
 
-    # parameter_column = ['ansatz_layers','dropout_ratio', 'param_theta']  # ansatz_layers, dropout_ratio, param_theta
+    # experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=True)
+    experiment_path = "FINAL_RESULTS/PARAMETRIZE_STUDY/approximation_ratio"
+    # experiment_path = "results/eval"
 
-    # combined_df = read_all_runs(config_name, experiment_ids = [1])
+
+    ### SINGLE EXPERIMENTS
+    # combined_df = read_all_runs(config_name, experiment_path=experiment_path, experiment_ids = [13])
     # metrics_df = extract_metrics(combined_df)
-    # plot_average_metrics(metrics_df, parameter_column, experiment_path)
-    # plot_approximation_vs_entanglement(metrics_df, experiment_path)
-    # plot_metrics_with_dropout(metrics_df, parameter_column='ansatz_layers', group_column='dropout_ratio', experiment_folder=experiment_path)
 
-    # plot_metrics_with_grouping(
+    # plot_approximation_ratio_with_variability(
     #     metrics_df=metrics_df.drop(columns=['entangling_capability', 'expressibility']),
-    #     parameter_column='dropout_ratio',      # x axis
-    #     group_column='ansatz_type',            # Grouping by ansatz type
-    #     metrics_to_plot=['approximation_ratio'],
-    #     experiment_folder=experiment_path
-    # )
-
-    # plot_expressibility_entanglement(
-    #     metrics_df=metrics_df,
-    #     x_column='ansatz_layers',      # Parameter to vary on the x-axis: ansatz_layers, dropout_ratio, param_theta
-    #     group_column='ansatz_type',   # Grouping by ansatz type or other variables
-    #     experiment_folder=experiment_path  # Path to save the plots
-    # )
+    #     x_column ='dropout_ratio',
+    #     experiment_folder=experiment_path)
 
     # plot_average_iteration_time(metrics_df, experiment_path)
 
-    # averaged_metrics_df = read_and_average_experiments(experiment_path, config_name)
+    ### AVERAGED EXPERIMENTS
 
-    # Plot averaged results
-    # plot_metrics_with_grouping(
-    # metrics_df=averaged_metrics_df.drop(columns=['entangling_capability', 'expressibility']),
-    # parameter_column='dropout_ratio',
-    # group_column='ansatz_type',
-    # metrics_to_plot=['approximation_ratio'],
-    # experiment_folder=experiment_path
-    # )
+    averaged_metrics_df = read_and_average_experiments(experiment_path, config_name, 'param_theta')
+
+    # plot_combined_expressibility_entanglement(averaged_metrics_df, x_column='dropout_ratio', experiment_folder=experiment_path)
+
+    plot_combined_approximation_ratio(
+        metrics_df=averaged_metrics_df,
+        x_column ='param_theta',
+        experiment_folder=experiment_path)
+
