@@ -2,7 +2,7 @@ import time
 
 import numpy as np
 from qiskit import QuantumCircuit
-from qiskit.circuit import Parameter
+from qiskit.circuit import Parameter, ParameterVector
 from qiskit.circuit.library import CRXGate
 from qiskit.primitives import Estimator
 from qiskit_algorithms.minimum_eigensolvers import VQE
@@ -27,9 +27,12 @@ def create_hea(num_qubits, depth, ansatz_id):
             for i in range(num_qubits):
                 circuit.ry(theta_list[i + num_qubits * d], i)
 
-        for i in range(num_qubits - 1):
-            circuit.cx(i, i + 1)
-        circuit.cx(num_qubits - 1, 0)
+            for i in range(num_qubits - 1):
+                circuit.cx(i, i + 1)
+            circuit.cx(num_qubits - 1, 0)
+
+            circuit.barrier()
+
 
     elif ansatz_id == 2:
         # Ansatz 2: double rotational ansatz RYRX ansatz from Sim et. al and found in many other papers (high expr.)
@@ -40,12 +43,11 @@ def create_hea(num_qubits, depth, ansatz_id):
                 circuit.ry(theta_list[2 * i + 2 * num_qubits * d], i)
                 circuit.rx(theta_list[2 * i + 1 + 2 * num_qubits * d], i)
 
-            circuit.barrier()
-
             for i in range(num_qubits - 1):
                 circuit.cx(i, i + 1)
             circuit.cx(num_qubits - 1, 0)
 
+            circuit.barrier()
 
     elif ansatz_id == 3:
         # Ansatz 3: Uneven entanglement structure, Circuit 15 as shown in sim expressibility (low expr.)
@@ -54,7 +56,6 @@ def create_hea(num_qubits, depth, ansatz_id):
         for d in range(depth):
             for i in range(num_qubits):
                 circuit.ry(theta_list[i + num_qubits * d], i)
-            circuit.barrier()
 
             if d % 2 == 0:
                 for i in range(0, num_qubits - 1, 2):
@@ -63,6 +64,8 @@ def create_hea(num_qubits, depth, ansatz_id):
                 for i in range(1, num_qubits - 1, 2):
                     circuit.cx(i, i + 1)
                 circuit.cx(num_qubits - 1, 0)
+            circuit.barrier()
+
     else:
         raise ValueError("Invalid ansatz_id. Supported ids are 1, 2 and 3.")
 
@@ -98,7 +101,7 @@ def apply_dropout(circuit, dropout_rate):
     return circuit
 
 
-def apply_parametric_entangling(circuit, theta_value):
+def apply_constant_parametric_entangling(circuit, theta_value):
     """
     Replaces CX gates with parametrized CRX gates to control entanglement strength.
 
@@ -141,6 +144,53 @@ def apply_parametric_entangling(circuit, theta_value):
     return circuit
 
 
+def apply_parametric_entangling(circuit, theta_value):
+    """
+    Replaces CX gates with parametrized CRX gates to control entanglement strength
+    while ensuring parameter ordering and correct bounds also for multiple layers.
+    """
+    # Convert theta_value safely
+    if isinstance(theta_value, str):
+        try:
+            theta_value = eval(theta_value, {"np": np})  # Safe eval with restricted namespace
+        except Exception:
+            raise ValueError(f"Invalid theta_value: {theta_value}. Must be a valid numerical expression.")
+
+    theta_max = float(theta_value)
+
+    crx_param_bounds = {}
+    parameter_bounds = []  # Ordered list of parameter bounds to pass to vqe
+
+    new_data = []
+    crx_param_index = 0
+
+    print("\nOriginal Circuit:")
+    print(circuit.draw())
+
+    for inst, qargs, cargs in circuit.data:
+        if inst.name in ['rx', 'ry', 'rz']:
+            # RX, RY, RZ gates: Keep them unbounded
+            param = Parameter(f'θ_{inst.name}_{len(parameter_bounds)}')
+            parameter_bounds.append(None)
+            new_data.append((inst.__class__(param), qargs, cargs))
+
+        elif inst.name == 'cx':
+            # Replace CX with a trainable CRX gate and create corresponding bounds
+            crx_param = Parameter(f'θ_crx_{crx_param_index}')
+            crx_gate = CRXGate(crx_param)
+
+            crx_param_bounds[crx_param] = (-theta_max, theta_max)
+            parameter_bounds.append((-theta_max, theta_max))
+
+            new_data.append((crx_gate, qargs, cargs))
+            crx_param_index += 1
+        else:
+            new_data.append((inst, qargs, cargs))
+
+    circuit.data = new_data
+    return circuit, crx_param_bounds, parameter_bounds
+
+
 def create_vqe(config, qubits, energy_history, num_iteration):
     ansatz_depth = config['vqe_parameters']['ansatz_layers']
     ansatz_type = config['vqe_parameters']['ansatz_type']
@@ -162,7 +212,7 @@ def create_vqe(config, qubits, energy_history, num_iteration):
     if entangle_method == 'dropout':
         ansatz = apply_dropout(ansatz, dropout_ratio)
     elif entangle_method == 'parametrize':
-        ansatz = apply_parametric_entangling(ansatz, param_theta)
+        ansatz, crx_param_bounds, parameter_bounds = apply_parametric_entangling(ansatz, param_theta)
     elif entangle_method == 'none':
         pass
     else:
@@ -182,7 +232,8 @@ def create_vqe(config, qubits, energy_history, num_iteration):
             energy_history.append(float(round(energy, 4)))
 
     vqe = VQE(estimator, ansatz, optimizer, callback=vqe_callback)
-
+    if entangle_method == 'parametrize':
+        vqe.parameter_bounds = parameter_bounds
     return ansatz, random_params, vqe
 
 def run_vqe_for_max_cut(g, config, seed, num_iteration):

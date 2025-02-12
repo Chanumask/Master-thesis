@@ -1,5 +1,5 @@
 problem_class: max_cut
-iterations: 1 # 50
+iterations: 50 # 1,50
 base_seed: 10
 num_seeds: 1  # 10
 
@@ -11,9 +11,9 @@ max_cut:
 vqe_parameters:
   ansatz_type: [HEA_1,HEA_2,HEA_3]
   ansatz_layers: [1,3,5]
-  entangle_method: 'dropout'    # Options: none, dropout, parametrize
-  dropout_ratio: [0,0.2,0.4,0.6,0.8]
-  param_theta: 0                # [np.pi/2, np.pi/4, np.pi/8] # symmetric vs random?
+  entangle_method: 'parametrize'    # Options: none, dropout, parametrize
+  dropout_ratio: 0 # [0,0.2,0.4,0.6,0.8]
+  param_theta: [np.pi/2, np.pi/4, np.pi/8]
   optimizer: SPSA               # Options: COBYLA, SPSA
 
 eval:

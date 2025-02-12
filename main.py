@@ -99,8 +99,8 @@ if __name__ == '__main__':
     problem_type = "max_cut"
     config_name = "fully_connected"
 
-    # experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=True)
-    experiment_path = "FINAL_RESULTS/PARAMETRIZE_STUDY/expr_entcap"
+    experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=True)
+    # experiment_path = "FINAL_RESULTS/PARAMETRIZE_STUDY/expr_entcap"
 
     ### SINGLE EXPERIMENTS
     # combined_df = read_all_runs(config_name, experiment_path=experiment_path, experiment_ids = [13])
@@ -115,9 +115,9 @@ if __name__ == '__main__':
 
     ### AVERAGED EXPERIMENTS
 
-    averaged_metrics_df = read_and_average_experiments(experiment_path, config_name, 'param_theta')
+    # averaged_metrics_df = read_and_average_experiments(experiment_path, config_name, 'param_theta')
 
-    plot_combined_expressibility_entanglement(averaged_metrics_df, x_column='param_theta', experiment_folder=experiment_path)
+    # plot_combined_expressibility_entanglement(averaged_metrics_df, x_column='param_theta', experiment_folder=experiment_path)
 
     # plot_combined_approximation_ratio(
     #     metrics_df=averaged_metrics_df,
