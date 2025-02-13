@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import matplotlib
 from matplotlib import pyplot as plt
+from matplotlib.lines import Line2D
 from scipy.ndimage import label
 
 matplotlib.use('Agg')
@@ -464,8 +465,13 @@ def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_f
 
     # Define marker styles for different layers
     marker_styles = {"1": "o", "3": "s", "5": "^"}
+
+    # Define colors for ansatz types
     palette = {"HEA_1 (RY)": "blue", "HEA_2 (RYRX)": "red", "HEA_3 (ARY)": "green"}
     shade_palette = {"HEA_1 (RY)": "lightblue", "HEA_2 (RYRX)": "lightcoral", "HEA_3 (ARY)": "lightgreen"}
+
+    # Define a separate palette for ansatz layers (needed for FacetGrid)
+    layer_palette = {"1": "black", "3": "gray", "5": "dimgray"}
 
     metrics_to_plot = [
         ('mean_expressibility', 'q10_expressibility', 'q90_expressibility', 'Expressibility'),
@@ -477,9 +483,8 @@ def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_f
             print(f"Skipping {metric_label} because all values are NaN.")
             continue
 
-        # Single grouped plot with variability bands
+        # **Single grouped plot with all ansätze together**
         plt.figure(figsize=(10, 6))
-
         for ansatz in metrics_df['ansatz_type'].unique():
             subset = metrics_df[metrics_df['ansatz_type'] == ansatz]
             if subset[metric].isna().all():
@@ -501,11 +506,8 @@ def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_f
                                      layer_data[q10_col],
                                      layer_data[q90_col], alpha=0.1, color=shade_palette.get(ansatz, "gray"))
 
-        # Create separate legends for Ansatz types and Layers
-        from matplotlib.lines import Line2D
-        marker_legend = [
-            Line2D([0], [0], marker=marker_styles[layer], linestyle="", color="black", label=f"Layers: {layer}") for
-            layer in marker_styles]
+        # **Legend customization**
+        marker_legend = [Line2D([0], [0], marker=marker_styles[layer], linestyle="", color="black", label=f"Layers: {layer}") for layer in marker_styles]
         color_legend = [Line2D([0], [0], linestyle="-", color=palette[ansatz], label=ansatz) for ansatz in palette]
         legend1 = plt.legend(handles=color_legend, title="Ansatz Type", loc="upper right")
         plt.gca().add_artist(legend1)
@@ -521,9 +523,7 @@ def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_f
         plt.close()
         print(f"Saved plot to {save_path}")
 
-        # FacetGrid for separate subplots per ansatz_type with Q10-Q90 shadow and different markers
-        g = sns.FacetGrid(metrics_df, col="ansatz_type", hue="ansatz_layers", height=5, aspect=1.2, palette="tab10")
-        g.map_dataframe(sns.lineplot, x=x_column, y=metric)
+        g = sns.FacetGrid(metrics_df, col="ansatz_type", height=5, aspect=1.2, sharey=True, sharex=True)
 
         for ax, ansatz in zip(g.axes.flat, metrics_df['ansatz_type'].unique()):
             subset = metrics_df[metrics_df['ansatz_type'] == ansatz]
@@ -531,12 +531,34 @@ def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_f
                 layer_data = subset[subset['ansatz_layers'] == layer]
                 if layer_data[q10_col].isna().all() or layer_data[q90_col].isna().all():
                     continue
+
+                # Manually set line colors to match ansatz type
+                line_color = palette[ansatz]  # Force correct ansatz color
                 ax.fill_between(layer_data[x_column],
                                 layer_data[q10_col],
-                                layer_data[q90_col], alpha=0.1, color=shade_palette.get(ansatz, "gray"))
-                ax.plot(layer_data[x_column], layer_data[metric], marker=marker_styles.get(layer, "o"), linestyle="-")
+                                layer_data[q90_col],
+                                alpha=0.1, color=shade_palette.get(ansatz, "gray"))
+                ax.plot(layer_data[x_column], layer_data[metric],
+                        marker=marker_styles.get(layer, "o"), linestyle="-",
+                        color=line_color)  # Force line color
 
-        g.add_legend()
+        # **Set axis labels manually**
+        for ax in g.axes.flat:
+            ax.set_xlabel(x_column.replace("_", " ").title())  # Set x-label for all subplots
+        g.axes[0, 0].set_ylabel(metric_label)  # Set y-label only for the leftmost subplot
+
+        # **Fix subplot titles to only show "HEA_1", "HEA_2", etc.**
+        for ax, ansatz in zip(g.axes.flat, metrics_df['ansatz_type'].unique()):
+            ax.set_title(ansatz.replace("ansatz_type = ", ""))  # Remove unnecessary text
+
+        # **Manually add legend in the rightmost subplot**
+        rightmost_ax = g.axes.flat[-1]  # Get the rightmost subplot
+        layer_legend = [
+            Line2D([0], [0], marker=marker_styles[layer], linestyle="", color="black", label=f"Layers: {layer}")
+            for layer in marker_styles
+        ]
+        rightmost_ax.legend(handles=layer_legend, title="Layers", loc="upper right")
+
         plt.subplots_adjust(top=0.85)
         g.fig.suptitle(f"{metric_label} vs {x_column.replace('_', ' ').title()}")
 
@@ -579,7 +601,7 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
         print(f"Skipping {metric_label} because all values are NaN.")
         return
 
-    # Single grouped plot with variability bands
+    # **Single grouped plot with variability bands**
     plt.figure(figsize=(10, 6))
 
     legend_handles = []
@@ -592,7 +614,8 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
             layer_data = subset[subset['ansatz_layers'] == layer]
             line, = plt.plot(layer_data[x_column], layer_data[metric],
                              marker=marker_styles.get(layer, "o"),
-                             color=palette.get(ansatz, "black"))
+                             color=palette.get(ansatz, "black"),
+                             linestyle="-")
             legend_handles.append(line)
 
             if q10_col in layer_data.columns and q90_col in layer_data.columns:
@@ -601,7 +624,6 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
                                  layer_data[q90_col], alpha=0.1, color=shade_palette.get(ansatz, "gray"))
 
     # Create separate legends for Ansatz types and Layers
-    from matplotlib.lines import Line2D
     marker_legend = [Line2D([0], [0], marker=marker_styles[layer], linestyle="", color="black", label=f"Layers: {layer}") for layer in marker_styles]
     color_legend = [Line2D([0], [0], linestyle="-", color=palette[ansatz], label=ansatz) for ansatz in palette]
     legend1 = plt.legend(handles=color_legend, title="Ansatz Type", loc="upper right")
@@ -618,9 +640,8 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
     plt.close()
     print(f"Saved plot to {save_path}")
 
-    # FacetGrid for separate subplots per ansatz_type with Q10-Q90 shadow and different markers
-    g = sns.FacetGrid(metrics_df, col="ansatz_type", hue="ansatz_layers", height=5, aspect=1.2, palette="tab10")
-    g.map_dataframe(sns.lineplot, x=x_column, y=metric)
+    # **FacetGrid for separate subplots per ansatz_type with Q10-Q90 shadow and different markers**
+    g = sns.FacetGrid(metrics_df, col="ansatz_type", height=5, aspect=1.2, sharey=True, sharex=True)
 
     for ax, ansatz in zip(g.axes.flat, metrics_df['ansatz_type'].unique()):
         subset = metrics_df[metrics_df['ansatz_type'] == ansatz]
@@ -628,16 +649,36 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
             layer_data = subset[subset['ansatz_layers'] == layer]
             if layer_data[q10_col].isna().all() or layer_data[q90_col].isna().all():
                 continue
-            ax.fill_between(layer_data[x_column],
-                            layer_data[q10_col],
-                            layer_data[q90_col], alpha=0.1, color=shade_palette.get(ansatz, "gray"))
-            ax.plot(layer_data[x_column], layer_data[metric], marker=marker_styles.get(layer, "o"), linestyle="-")
 
-    g.add_legend()
+            line_color = palette[ansatz]  # Ensure correct ansatz color
+            # ax.fill_between(layer_data[x_column],
+            #                 layer_data[q10_col],
+            #                 layer_data[q90_col],
+            #                 alpha=0.1, color=shade_palette.get(ansatz, "gray"))
+            ax.plot(layer_data[x_column], layer_data[metric],
+                    marker=marker_styles.get(layer, "o"), linestyle="-",
+                    color=line_color)  # Force line color
+
+    # **Set axis labels manually**
+    for ax in g.axes.flat:
+        ax.set_xlabel(x_column.replace("_", " ").title())  # X-label for all subplots
+    g.axes[0, 0].set_ylabel(metric_label)  # Y-label only for leftmost subplot
+
+    # **Fix subplot titles to only show "HEA_1", "HEA_2", "HEA_3"**
+    for ax, ansatz in zip(g.axes.flat, metrics_df['ansatz_type'].unique()):
+        ax.set_title(ansatz.replace("ansatz_type = ", ""))  # Clean title
+
+    # **Manually add legend in the rightmost subplot**
+    rightmost_ax = g.axes.flat[-1]  # Get the rightmost subplot
+    layer_legend = [
+        Line2D([0], [0], marker=marker_styles[layer], linestyle="", color="black", label=f"Layers: {layer}")
+        for layer in marker_styles
+    ]
+    rightmost_ax.legend(handles=layer_legend, title="Layers", loc="upper right")
+
     plt.subplots_adjust(top=0.85)
     g.fig.suptitle(f"{metric_label} vs {x_column.replace('_', ' ').title()}")
 
     save_path = os.path.join(experiment_folder, f"approximation_ratio_vs_{x_column}_facet_by_ansatz_type.png")
     g.savefig(save_path)
     print(f"Saved plot to {save_path}")
-

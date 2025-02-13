@@ -100,7 +100,10 @@ if __name__ == '__main__':
     config_name = "fully_connected"
 
     experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=True)
-    # experiment_path = "FINAL_RESULTS/PARAMETRIZE_STUDY/expr_entcap"
+
+    # experiment_path = "FINAL_RESULTS/TRAINABLE_PARAMETRIZE/ent"
+    # experiment_path = "FINAL_RESULTS/DROPOUT_STUDY/expr_entcap"
+    # experiment_path = "FINAL_RESULTS/DROPOUT_STUDY/"
 
     ### SINGLE EXPERIMENTS
     # combined_df = read_all_runs(config_name, experiment_path=experiment_path, experiment_ids = [13])
