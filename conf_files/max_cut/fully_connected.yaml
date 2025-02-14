@@ -1,5 +1,5 @@
 problem_class: max_cut
-iterations: 50 # 1,50
+iterations: 1 # 1,50
 base_seed: 10
 num_seeds: 1  # 10
 
@@ -17,7 +17,7 @@ vqe_parameters:
   optimizer: SPSA               # Options: COBYLA, SPSA
 
 eval:
-  ent_cap: False
-  expressibility: False
+  ent_cap: True
+  expressibility: True
   expr_plot: False
   qpic: False

@@ -164,8 +164,8 @@ def apply_parametric_entangling(circuit, theta_value):
     new_data = []
     crx_param_index = 0
 
-    print("\nOriginal Circuit:")
-    print(circuit.draw())
+    # print("\nOriginal Circuit:")
+    # print(circuit.draw())
 
     for inst, qargs, cargs in circuit.data:
         if inst.name in ['rx', 'ry', 'rz']:
@@ -213,6 +213,12 @@ def create_vqe(config, qubits, energy_history, num_iteration):
         ansatz = apply_dropout(ansatz, dropout_ratio)
     elif entangle_method == 'parametrize':
         ansatz, crx_param_bounds, parameter_bounds = apply_parametric_entangling(ansatz, param_theta)
+        if parameter_bounds is None:
+            raise ValueError("Error: parameter_bounds should not be None after applying parametric entangling.")
+        ansatz.parameter_bounds = [
+            bound if bound is not None else (-2 * np.pi, 2 * np.pi) for bound in parameter_bounds
+        ]
+        # print("Parameter Bounds Set on Ansatz:", ansatz.parameter_bounds)
     elif entangle_method == 'none':
         pass
     else:
@@ -232,8 +238,7 @@ def create_vqe(config, qubits, energy_history, num_iteration):
             energy_history.append(float(round(energy, 4)))
 
     vqe = VQE(estimator, ansatz, optimizer, callback=vqe_callback)
-    if entangle_method == 'parametrize':
-        vqe.parameter_bounds = parameter_bounds
+
     return ansatz, random_params, vqe
 
 def run_vqe_for_max_cut(g, config, seed, num_iteration):
