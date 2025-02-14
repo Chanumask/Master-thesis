@@ -51,19 +51,24 @@ def create_hea(num_qubits, depth, ansatz_id):
 
     elif ansatz_id == 3:
         # Ansatz 3: Uneven entanglement structure, Circuit 15 as shown in sim expressibility (low expr.)
-        theta_list = [Parameter(f'θ_{i}_{j}') for i in range(num_qubits) for j in range(depth)]
+        theta_list = [[Parameter(f'θ_{i}{j}') for j in range(2)] for i in range(num_qubits)]
 
         for d in range(depth):
             for i in range(num_qubits):
-                circuit.ry(theta_list[i + num_qubits * d], i)
+                circuit.ry(theta_list[i][0], i)
 
-            if d % 2 == 0:
-                for i in range(0, num_qubits - 1, 2):
-                    circuit.cx(i, i + 1)
-            else:
-                for i in range(1, num_qubits - 1, 2):
-                    circuit.cx(i, i + 1)
-                circuit.cx(num_qubits - 1, 0)
+            for i in range(0, num_qubits - 1, 2):
+                circuit.cx(i, i + 1)
+
+            circuit.barrier()
+
+            for i in range(num_qubits):
+                circuit.ry(theta_list[i][1], i)
+
+            for i in range(1, num_qubits - 1, 2):
+                circuit.cx(i, i + 1)
+            circuit.cx(num_qubits - 1, 0)
+
             circuit.barrier()
 
     else:
