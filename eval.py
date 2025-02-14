@@ -156,7 +156,21 @@ def entanglement_capability(ansatz, num_samples=1000, measure="meyer-wallach"):
         raise ValueError("Ansatz has no parameters to sample for entanglement capability calculation.")
 
     num_qubits = ansatz.num_qubits
-    param_list = [2 * np.pi * np.random.rand(ansatz.num_parameters) for _ in range(num_samples)]
+
+    bounds = getattr(ansatz, "parameter_bounds", None)
+    if bounds is None:
+        bounds = [(-2 * np.pi, 2 * np.pi)] * ansatz.num_parameters
+
+    lower_bounds, upper_bounds = zip(*[(low if low is not None else -2 * np.pi,
+                                        high if high is not None else 2 * np.pi)
+                                       for low, high in bounds])
+
+    # Generate `num_samples` full sets of parameters
+    param_list = [np.random.uniform(low=lower_bounds, high=upper_bounds, size=ansatz.num_parameters)
+                  for _ in range(num_samples)]
+
+    # param_list = [2 * np.pi * np.random.rand(ansatz.num_parameters) for _ in range(num_samples)]
+    # print(param_list)
 
     entanglement_scores = []
 
@@ -209,9 +223,24 @@ def compute_expressibility(ansatz, ansatz_name, num_samples=1000, bins=50, plot_
 
     num_qubits = ansatz.num_qubits
 
+
+    bounds = getattr(ansatz, "parameter_bounds", None)
+    if bounds is None:
+        bounds = [(-2 * np.pi, 2 * np.pi)] * ansatz.num_parameters
+
+    lower_bounds, upper_bounds = zip(*[(low if low is not None else -2 * np.pi,
+                                        high if high is not None else 2 * np.pi)
+                                       for low, high in bounds])
+
+    # Generate `num_samples` full sets of parameters
+    param_list = [np.random.uniform(low=lower_bounds, high=upper_bounds, size=ansatz.num_parameters)
+                  for _ in range(num_samples)]
+
+    # param_list = [2 * np.pi * np.random.rand(ansatz.num_parameters) for _ in range(num_samples)]
+    #print(param_list)
+
     # Step 1: Generate fidelities for the ansatz
     circuit_fidelities = []
-    param_list = [2 * np.pi * np.random.rand(ansatz.num_parameters) for _ in range(num_samples)]
 
     for params_1 in param_list:
         circuit_1 = ansatz.assign_parameters(params_1)
