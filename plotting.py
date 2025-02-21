@@ -1,16 +1,19 @@
 import csv
+import math
 import os
 
 import seaborn as sns
 import numpy as np
 import pandas as pd
 import matplotlib
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, cm
 from matplotlib.lines import Line2D
-from scipy.ndimage import label
 
 matplotlib.use('Agg')
 import ast
+
+
+### GENERAL ###
 
 
 def read_all_runs(config_name, experiment_path, experiment_ids):
@@ -180,37 +183,6 @@ def read_and_average_experiments(experiment_path, config_name, x_column):
 
     return aggregated_metrics
 
-
-def plot_energy_history_from_csv(filepath, out_path):
-    """Plot the energy history from the result CSV."""
-    with open(filepath, mode='r') as file:
-        reader = csv.DictReader(file)
-
-        energy_histories = []
-        run_labels = []
-
-        for row in reader:
-            eh_string = row.get('energy_history', '')
-            if eh_string:
-                eh = ast.literal_eval(eh_string)
-                energy_histories.append(eh)
-                run_labels.append(f"Run {len(run_labels) + 1}")
-
-        plt.figure(figsize=(10, 6))
-
-        for i, energy_history in enumerate(energy_histories):
-            steps = [x * 10 for x in range(1, len(energy_history) + 1)]
-            plt.plot(steps, energy_history, marker='o', linestyle='-', label=run_labels[i])
-
-        plt.title('Energy History for Each Run')
-        plt.xlabel('Step')
-        plt.ylabel('Energy')
-        plt.legend(title='Runs')
-        plt.grid(True)
-        plt.savefig(f"{out_path}/energy_history_plot.png", format='png')
-        plt.close()
-
-
 def save_plots(all_data, metrics_to_plot, resultpath):
     base_dir = resultpath
 
@@ -299,6 +271,140 @@ def plot_metrics_with_grouping(metrics_df, parameter_column, group_column, metri
         print(f"Saved plot to {save_path}")
 
 
+### TIMES ###
+
+
+def plot_average_iteration_time(metrics_df, experiment_folder):
+    """
+    Plot average iteration time for each run against the number of qubits.
+    Group data by ansatz_type and ansatz_layers.
+    Generates three plots:
+    - Average including the first iteration
+    - Average excluding the first iteration
+    - Adjusted average where the first iteration is added after averaging the rest
+
+    Args:
+        metrics_df (pd.DataFrame): DataFrame containing metrics data.
+        experiment_folder (str): Path to save the plots.
+    """
+
+    # Ensure numeric columns
+    metrics_df['nodes'] = pd.to_numeric(metrics_df['nodes'], errors='coerce')
+    metrics_df['iter_time'] = pd.to_numeric(metrics_df['iter_time'], errors='coerce')
+
+    # Drop rows with missing data
+    metrics_df = metrics_df.dropna(subset=['nodes', 'iter_time', 'ansatz_type', 'ansatz_layers'])
+
+    # Calculate averages
+    average_including_first = metrics_df.groupby(['nodes', 'ansatz_type', 'ansatz_layers'])['iter_time'].mean()
+
+    # Exclude first iteration for averaging
+    metrics_df_excluding_first = metrics_df.loc[
+        metrics_df.groupby(['nodes', 'ansatz_type', 'ansatz_layers']).cumcount() > 0
+    ]
+    average_excluding_first = metrics_df_excluding_first.groupby(['nodes', 'ansatz_type', 'ansatz_layers'])['iter_time'].mean()
+
+    # Adjusted average: average of all but first iteration + value of first iteration
+    first_iterations = metrics_df.loc[metrics_df.groupby(['nodes', 'ansatz_type', 'ansatz_layers']).cumcount() == 0]
+    adjusted_average = (average_excluding_first + first_iterations.set_index(['nodes', 'ansatz_type', 'ansatz_layers'])['iter_time']) / 2
+    print(average_excluding_first)
+    print(first_iterations)
+    def format_seconds(seconds, add_strings=False):
+        minutes = int(seconds // 60)
+        sec = int(seconds % 60)
+        return f"{minutes} min {sec} sec" if add_strings else f"{minutes}:{sec:02d}"
+
+    def plot_average(df, title, filename):
+        """Helper function to plot the average iteration times."""
+        df = df.reset_index()
+        df['group'] = "Circuit " + df['ansatz_type'].str.extract(r'(\d)$')[0] + ", " + df['ansatz_layers'].astype(str) + " Layers"
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        sns.lineplot(data=df, x='nodes', y='iter_time', hue='group', marker='o', ax=ax)
+        ax.set_ylabel("Average Iteration Time (MM:SS)")
+        ax.set_xlabel("Number of Qubits (nodes)")
+        ax.legend(title="Ansatz Type and Layers")
+        ax.grid(True)
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: format_seconds(x)))
+
+        plt.title(title)
+        save_path = os.path.join(experiment_folder, filename)
+        plt.savefig(save_path, bbox_inches="tight")
+        plt.close()
+        print(f"Saved plot to {save_path}")
+
+    # plot_average(average_including_first, "Average Iteration Time (Including First Iteration)", "avg_iter_time_including_first.png")
+    plot_average(average_excluding_first, "Average Iteration Time (Excluding First Iteration)", "avg_iter_time_excluding_first.png")
+    plot_average(adjusted_average, "Adjusted Average Iteration Time (First Iteration Added)", "avg_iter_time_adjusted.png")
+
+
+def plot_average_time_per_graph(df, experiment_folder):
+    """
+    Plot average time per graph against the number of nodes with improved readability.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing 'nodes' and 'avg_time_per_graph' in seconds.
+        experiment_folder (str): Path to save the plot.
+    """
+    # Ensure numeric columns and remove NaNs
+    df['nodes'] = pd.to_numeric(df['nodes'], errors='coerce')
+    df['avg_time_per_graph'] = pd.to_numeric(df['avg_time_per_graph'], errors='coerce')
+    df = df.dropna(subset=['nodes', 'avg_time_per_graph'])
+
+    # Formatter for y-axis (MM:SS)
+    def format_seconds(seconds):
+        minutes = int(seconds // 60)
+        sec = int(seconds % 60)
+        return f"{minutes}:{sec:02d}"
+
+    # Plot settings
+    plt.figure(figsize=(10, 7))  # Larger figure for clarity
+    sns.set_theme(style="whitegrid")  # Cleaner grid
+    sns.lineplot(
+        data=df,
+        x='nodes',
+        y='avg_time_per_graph',
+        marker='o',
+        color='blue',
+        linewidth=2.5,
+        markersize=10
+    )
+
+    # Font size adjustments
+    plt.xlabel("Number of Qubits (Nodes)", fontsize=16,  weight='bold', labelpad=12)
+    plt.ylabel("Average Time per Graph (MM:SS)", fontsize=16,  weight='bold', labelpad=12)
+    plt.title("Average Time per Graph vs Number of Nodes", fontsize=18, weight='bold', pad=15)
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+
+    # Format y-axis
+    plt.gca().yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: format_seconds(x)))
+
+    # Tight layout and grid
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.tight_layout()
+
+    # Save as PDF (vector format)
+    os.makedirs(experiment_folder, exist_ok=True)
+    save_path = os.path.join(experiment_folder, "average_time_per_graph.pdf")
+    plt.savefig(save_path, bbox_inches='tight', dpi=300)
+    plt.close()
+
+    print(f"Saved plot to {save_path}")
+
+    # data = {
+    #     'nodes': [8, 10, 12, 14, 16],
+    #     'avg_time_per_graph': [6, 9, 18, 98, 1443]  # Times in seconds
+    # }
+    #
+    # df = pd.DataFrame(data)
+    # plot_average_time_per_graph(df, "plots")
+
+
+### EXPRESSIBILITY & ENTANGLEMENT ###
+
+
 def plot_expressibility_entanglement(metrics_df, x_column, group_column, experiment_folder):
     """
     Plot expressibility and entangling capability metrics for varying parameters.
@@ -349,100 +455,6 @@ def plot_expressibility_entanglement(metrics_df, x_column, group_column, experim
         plt.close()
         print(f"Saved plot to {save_path}")
 
-
-def plot_average_iteration_time(metrics_df, experiment_folder):
-    """
-    Plot average iteration time for each run against the number of qubits.
-    Group data by ansatz_type and ansatz_layers.
-    Display the times in MM:SS format on the primary axis.
-
-    Args:
-        metrics_df (pd.DataFrame): DataFrame containing metrics data.
-        experiment_folder (str): Path to the folder where the plots will be saved.
-    """
-    # Ensure numeric columns
-    metrics_df['nodes'] = pd.to_numeric(metrics_df['nodes'], errors='coerce')
-    metrics_df['iteration_time'] = pd.to_numeric(metrics_df['iteration_time'], errors='coerce')
-
-    # Take the absolute value of iteration_time
-    metrics_df['iteration_time'] = metrics_df['iteration_time'].abs()
-
-    # Drop rows with missing data
-    metrics_df = metrics_df.dropna(subset=['nodes', 'iteration_time', 'ansatz_type', 'ansatz_layers'])
-
-    # Calculate average times
-    average_including_first = metrics_df.groupby(['nodes', 'ansatz_type', 'ansatz_layers'])['iteration_time'].mean()
-    metrics_df_excluding_first = metrics_df.loc[
-        metrics_df.groupby(['nodes', 'ansatz_type', 'ansatz_layers']).cumcount() > 0]
-    average_excluding_first = metrics_df_excluding_first.groupby(['nodes', 'ansatz_type', 'ansatz_layers'])[
-        'iteration_time'].mean()
-
-    # Convert seconds to MM:SS format
-    def format_seconds(seconds, add_strings=False):
-        minutes = int(seconds // 60)
-        sec = int(seconds % 60)
-        if add_strings:
-            return f"{minutes} min {sec} sec"
-        return f"{minutes}:{sec:02d}"
-
-    # Print average times in MM:SS format
-    print("Average Iteration Time Including First Iteration:")
-    print(average_including_first.apply(lambda x: format_seconds(x, add_strings=False)))
-
-    print("\nAverage Iteration Time Excluding First Iteration:")
-    print(average_excluding_first.apply(lambda x: format_seconds(x, add_strings=False)))
-
-    def plot_average(df, title, filename):
-        # Reset index for plotting
-        df = df.reset_index()
-        # Create a combined label for ansatz_type and ansatz_layers
-        df['group'] = df['ansatz_type'] + ", Layers: " + df['ansatz_layers'].astype(str)
-
-        # Define a formatter for the y-axis
-        def seconds_to_mmss(x, _):
-            return format_seconds(x, add_strings=False)
-
-        # Plot the data
-        fig, ax1 = plt.subplots(figsize=(10, 6))
-
-        sns.lineplot(
-            data=df,
-            x='nodes',
-            y='iteration_time',
-            hue='group',
-            marker='o',
-            ax=ax1
-        )
-        ax1.set_ylabel("Average Iteration Time (MM:SS)")
-        ax1.set_xlabel("Number of Qubits (nodes)")
-        ax1.legend(title="Ansatz Type and Layers")
-        ax1.grid(True)
-
-        # Apply the custom formatter to the y-axis
-        ax1.yaxis.set_major_formatter(plt.FuncFormatter(seconds_to_mmss))
-
-        # Adjust title and save the plot
-        plt.title(title)
-        save_path = os.path.join(experiment_folder, filename)
-        plt.savefig(save_path, bbox_inches="tight")
-        plt.close()
-        print(f"Saved plot to {save_path}")
-
-    # Plot for averages including the first iteration
-    plot_average(
-        average_including_first,
-        "Average Iteration Time (Including First Iteration) vs Number of Qubits",
-        "avg_iter_time_including_first.png"
-    )
-
-    # Plot for averages excluding the first iteration
-    plot_average(
-        average_excluding_first,
-        "Average Iteration Time (Excluding First Iteration) vs Number of Qubits",
-        "avg_iter_time_excluding_first.png"
-    )
-
-
 def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_folder):
     """
     Plot expressibility and entangling capability with error bands, grouped by ansatz type and layers.
@@ -454,9 +466,10 @@ def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_f
         experiment_folder (str): Path to the experiment folder where the plots will be saved.
     """
     ansatz_labels = {
-        "HEA_1": "HEA_1 (RY)",
-        "HEA_2": "HEA_2 (RYRX)",
-        "HEA_3": "HEA_3 (ARY)"
+        "HEA_1": "Circuit 1",
+        "HEA_2": "Circuit 2",
+        "HEA_3": "Circuit 3",
+    #    "HEA_4": "Circuit 4"
     }
 
     metrics_df['ansatz_type'] = metrics_df['ansatz_type'].replace(ansatz_labels)
@@ -467,8 +480,8 @@ def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_f
     marker_styles = {"1": "o", "3": "s", "5": "^"}
 
     # Define colors for ansatz types
-    palette = {"HEA_1 (RY)": "blue", "HEA_2 (RYRX)": "red", "HEA_3 (ARY)": "green"}
-    shade_palette = {"HEA_1 (RY)": "lightblue", "HEA_2 (RYRX)": "lightcoral", "HEA_3 (ARY)": "lightgreen"}
+    palette = {"Circuit 1": "blue", "Circuit 2": "red", "Circuit 3": "green"} #, "Circuit 4": "purple" }
+    shade_palette = {"Circuit 1": "lightblue", "Circuit 2": "lightcoral", "Circuit 3": "lightgreen"} # , "Circuit 4": "plum"}
 
     # Define a separate palette for ansatz layers (needed for FacetGrid)
     layer_palette = {"1": "black", "3": "gray", "5": "dimgray"}
@@ -567,6 +580,9 @@ def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_f
         print(f"Saved plot to {save_path}")
 
 
+### APPROX RATIO ###
+
+
 def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
     """
     Plot approximation ratio with error bands, grouped by ansatz type and layers.
@@ -578,9 +594,10 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
         experiment_folder (str): Path to the experiment folder where the plots will be saved.
     """
     ansatz_labels = {
-        "HEA_1": "HEA_1 (RY)",
-        "HEA_2": "HEA_2 (RYRX)",
-        "HEA_3": "HEA_3 (ARY)"
+        "HEA_1": "Circuit 1",
+        "HEA_2": "Circuit 2",
+        "HEA_3": "Circuit 3",
+    #    "HEA_4": "Circuit 4"
     }
 
     metrics_df['ansatz_type'] = metrics_df['ansatz_type'].replace(ansatz_labels)
@@ -589,8 +606,8 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
 
     # Define marker styles for different layers
     marker_styles = {"1": "o", "3": "s", "5": "^"}
-    palette = {"HEA_1 (RY)": "blue", "HEA_2 (RYRX)": "red", "HEA_3 (ARY)": "green"}
-    shade_palette = {"HEA_1 (RY)": "lightblue", "HEA_2 (RYRX)": "lightcoral", "HEA_3 (ARY)": "lightgreen"}
+    palette = {"Circuit 1": "blue", "Circuit 2": "red", "Circuit 3": "green"} #, "Circuit 4": "purple" }
+    shade_palette = {"Circuit 1": "lightblue", "Circuit 2": "lightcoral", "Circuit 3": "lightgreen"} # , "Circuit 4": "plum"}
 
     metric = 'mean_approximation'
     q10_col = 'q10_approximation'
@@ -682,3 +699,233 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
     save_path = os.path.join(experiment_folder, f"approximation_ratio_vs_{x_column}_facet_by_ansatz_type.png")
     g.savefig(save_path)
     print(f"Saved plot to {save_path}")
+
+
+### CONVERGENCE ###
+
+
+def plot_energy_history_from_csv(filepath, out_path):
+    """Plot the energy history from the result CSV."""
+    with open(filepath, mode='r') as file:
+        reader = csv.DictReader(file)
+
+        energy_histories = []
+        run_labels = []
+
+        for row in reader:
+            eh_string = row.get('energy_history', '')
+            if eh_string:
+                eh = ast.literal_eval(eh_string)
+                energy_histories.append(eh)
+                run_labels.append(f"Run {len(run_labels) + 1}")
+
+        plt.figure(figsize=(10, 6))
+
+        for i, energy_history in enumerate(energy_histories):
+            steps = [x * 10 for x in range(1, len(energy_history) + 1)]
+            plt.plot(steps, energy_history, marker='o', linestyle='-', label=run_labels[i])
+
+        plt.title('Energy History for Each Run')
+        plt.xlabel('Step')
+        plt.ylabel('Energy')
+        plt.legend(title='Runs')
+        plt.grid(True)
+        plt.savefig(f"{out_path}/energy_history_plot.png", format='png')
+        plt.close()
+
+def read_and_average_energy_histories(experiment_path, x_column):
+    """
+    Reads and averages energy histories across seeds for each run.
+
+    Args:
+        experiment_path (str): Path containing 'Experiment_*' folders.
+        x_column (str): Parameter for the x-axis ('dropout_ratio' or 'param_theta').
+
+    Returns:
+        pd.DataFrame: DataFrame with averaged energy histories, parameter values,
+                      ansatz_type, and ansatz_layers.
+    """
+    # Collect all run names (Run_46, Run_47, etc.) from the first experiment folder
+    experiment_folders = sorted([f for f in os.listdir(experiment_path) if f.startswith("Experiment_")])
+    if not experiment_folders:
+        raise ValueError(f"No valid experiments found in {experiment_path}")
+
+    first_experiment_path = os.path.join(experiment_path, experiment_folders[0])
+    run_folders = sorted([rf for rf in os.listdir(first_experiment_path) if rf.startswith("Run_")])
+
+    averaged_results = []
+
+    for run_folder in run_folders:
+        param_value = None
+        ansatz_type = None
+        ansatz_layers = None
+        energy_histories = []
+
+        for experiment_folder in experiment_folders:
+            run_path = os.path.join(experiment_path, experiment_folder, run_folder, "results_fully_connected.csv")
+            if not os.path.isfile(run_path):
+                print(f"Warning: Missing {run_path}. Skipping.")
+                continue
+
+            with open(run_path, mode='r') as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    # Extract and store energy history
+                    eh_string = row.get('energy_history', '')
+                    if eh_string:
+                        energy_history = ast.literal_eval(eh_string)
+                        energy_histories.append(energy_history)
+
+                    # Extract x_column parameter value
+                    if param_value is None and row.get(x_column):
+                        value_str = row.get(x_column).strip()
+                        try:
+                            # Safely evaluate math expressions like 'np.pi/2' or 'math.pi/4'
+                            param_value = eval(value_str, {"__builtins__": None, "np": np, "math": math})
+                        except Exception as e:
+                            print(f"Warning: Could not evaluate parameter value '{value_str}': {e}")
+                            param_value = None
+
+                    # Extract ansatz_type and ansatz_layers
+                    if ansatz_type is None:
+                        ansatz_type = row.get('ansatz_type', 'Unknown')
+                    if ansatz_layers is None and row.get('ansatz_layers'):
+                        ansatz_layers = int(row.get('ansatz_layers', 0))
+
+        if energy_histories:
+            # Pad shorter histories with NaNs for correct averaging
+            max_length = max(len(eh) for eh in energy_histories)
+            padded_histories = [eh + [np.nan] * (max_length - len(eh)) for eh in energy_histories]
+            averaged_energy = np.nanmean(padded_histories, axis=0)
+
+            averaged_results.append({
+                'param_value': param_value,
+                'energy_history': averaged_energy,
+                'ansatz_type': ansatz_type,
+                'ansatz_layers': ansatz_layers
+            })
+
+    # Convert results to DataFrame and sort by parameter value
+    df = pd.DataFrame(averaged_results).sort_values(by='param_value')
+    return df
+
+
+def plot_averaged_energy_histories(df, x_column, out_path):
+    """
+    Plots averaged energy histories with:
+      - Subplots: ansatz_type
+      - Color: param_value
+      - Marker: ansatz_layers
+
+    Args:
+        df (pd.DataFrame): DataFrame with 'param_value', 'energy_history', 'ansatz_type', and 'ansatz_layers'.
+        x_column (str): Parameter for the x-axis ('dropout_ratio' or 'param_theta').
+        out_path (str): Directory to save the plot.
+    """
+    # Map ansatz_type to human-readable names
+    ansatz_labels = {"HEA_1": "Circuit 1", "HEA_2": "Circuit 2", "HEA_3": "Circuit 3"}
+    df['ansatz_type'] = df['ansatz_type'].replace(ansatz_labels)
+
+    # Exclude "Circuit 1" with 1 layer (outlier removal)
+    df = df[~((df['ansatz_type'] == "Circuit 1") & (df['ansatz_layers'] == "1"))]
+
+    # Ensure ansatz_types are ordered as Circuit 1, Circuit 2, Circuit 3
+    ansatz_order = ["Circuit 1", "Circuit 2", "Circuit 3"]
+    df['ansatz_type'] = pd.Categorical(df['ansatz_type'], categories=ansatz_order, ordered=True)
+    df = df.sort_values('ansatz_type')
+    print(df)
+    # Marker styles for layers
+    marker_styles = {"1": "o", "3": "s", "5": "^"}
+    df['ansatz_layers'] = df['ansatz_layers'].astype(str)
+
+    # Color mapping for param_value
+    unique_param_values = sorted(df['param_value'].unique())
+    cmap = cm.get_cmap('viridis', len(unique_param_values))
+    color_map = {val: cmap(i / (len(unique_param_values) - 1)) for i, val in enumerate(unique_param_values)}
+
+    # Subplot setup
+    ansatz_types = ansatz_order
+    num_ansatz = len(ansatz_types)
+    fig, axes = plt.subplots(1, num_ansatz, figsize=(6 * num_ansatz, 6), sharey=True)
+
+    for ax, ansatz in zip(axes, ansatz_types):
+        subset = df[df['ansatz_type'] == ansatz]
+        for _, row in subset.iterrows():
+            steps = [10 * (i + 1) for i in range(len(row['energy_history']))]
+            ax.plot(
+                steps,
+                row['energy_history'],
+                marker=marker_styles.get(row['ansatz_layers'], "o"),
+                color=color_map.get(row['param_value'], "black"),
+                linestyle="-",
+                alpha=0.8,
+                label=f"{x_column}: {row['param_value']:.2f}, Layers: {row['ansatz_layers']}"
+            )
+
+        ax.set_title(ansatz, fontsize=14)
+        ax.set_xlabel("Step", fontsize=12)
+        ax.grid(True, linestyle='--', alpha=0.6)
+
+    axes[0].set_ylabel("Averaged Energy", fontsize=12)
+
+    # Legends
+    color_legend = [
+        Line2D([0], [0], linestyle="", marker="o", color=color_map[val], label=f"{x_column}: {val:.2f}")
+        for val in unique_param_values
+    ]
+
+    marker_legend = [
+        Line2D([0], [0], linestyle="", marker=marker_styles[layer], color="black", label=f"Layers: {layer}")
+        for layer in marker_styles
+    ]
+
+    # Add combined legends outside the plots
+    plt.figlegend(
+        handles=color_legend + marker_legend,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.05),
+        ncol=len(unique_param_values) + len(marker_styles),
+        title="Legend",
+        fontsize=10
+    )
+
+    plt.suptitle("Averaged Energy Convergence per Ansatz Type", fontsize=16, y=1.10)
+    plt.tight_layout()
+
+    # Save plot
+    os.makedirs(out_path, exist_ok=True)
+    output_file = os.path.join(out_path, "averaged_energy_subplots.png")
+    plt.savefig(output_file, bbox_inches='tight')
+    plt.close()
+
+    print(f"Plot saved to {output_file}")
+
+def check_outliers(df):
+    """
+    Prints max, min, and mean energy values for each ansatz_type and ansatz_layers combination
+    to identify potential outliers.
+    """
+    # Expand energy_history into separate columns for analysis
+    expanded_df = df.explode('energy_history')
+    expanded_df['energy_history'] = pd.to_numeric(expanded_df['energy_history'], errors='coerce')
+
+    # Group by ansatz_type and ansatz_layers to identify extremes
+    stats = expanded_df.groupby(['ansatz_type', 'ansatz_layers'])['energy_history'].agg(
+        ['min', 'max', 'mean', 'std'])
+    print("\nSummary Statistics (Energy History):")
+    print(stats.sort_values('max', ascending=False))
+
+    # Plot max energies for visual identification
+    stats.reset_index().plot(
+        x='ansatz_type',
+        y='max',
+        kind='bar',
+        title="Maximum Energy Values per Ansatz Type and Layer",
+        xlabel="Ansatz Type",
+        ylabel="Max Energy",
+        figsize=(10, 6),
+        legend=False
+    )
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.savefig("outliers", bbox_inches='tight')
+    plt.close()

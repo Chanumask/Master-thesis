@@ -7,7 +7,8 @@ from eval import entanglement_capability
 from max_cut import generate_graph_from_config
 from vqe import run_vqe_for_max_cut
 from plotting import plot_metrics_across_run_from_csv, plot_energy_history_from_csv, read_all_runs, extract_metrics, \
-    plot_average_iteration_time, read_and_average_experiments, plot_combined_expressibility_entanglement, plot_combined_approximation_ratio
+    plot_average_iteration_time, read_and_average_experiments, plot_combined_expressibility_entanglement, \
+    plot_combined_approximation_ratio, read_and_average_energy_histories, plot_averaged_energy_histories, check_outliers
 from util import load_config, log_vqe_results, generate_deterministic_seeds, create_run_folder, \
     create_experiment_folder
 
@@ -99,26 +100,16 @@ if __name__ == '__main__':
     problem_type = "max_cut"
     config_name = "fully_connected"
 
-    experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=True)
+    # experiment_path = run_experiment(problem_type, config_name, logging=True, plotting=True)
+    experiment_path = "FINAL_RESULTS/parametrize/approx"
 
-    # experiment_path = "FINAL_RESULTS/TRAINABLE_PARAMETRIZE/ent"
-    # experiment_path = "FINAL_RESULTS/DROPOUT_STUDY/expr_entcap"
-    # experiment_path = "FINAL_RESULTS/DROPOUT_STUDY/"
 
-    ### SINGLE EXPERIMENTS
-    # combined_df = read_all_runs(config_name, experiment_path=experiment_path, experiment_ids = [13])
-    # metrics_df = extract_metrics(combined_df)
-
-    # plot_approximation_ratio_with_variability(
-    #     metrics_df=metrics_df.drop(columns=['entangling_capability', 'expressibility']),
-    #     x_column ='dropout_ratio',
-    #     experiment_folder=experiment_path)
-
+    # metrics_df = read_all_runs(config_name,experiment_path,[61])
     # plot_average_iteration_time(metrics_df, experiment_path)
 
     ### AVERAGED EXPERIMENTS
 
-    # averaged_metrics_df = read_and_average_experiments(experiment_path, config_name, 'param_theta')
+    # averaged_metrics_df = read_and_average_experiments(experiment_path, config_name, 'param_theta')   # param_theta , dropout_ratio
 
     # plot_combined_expressibility_entanglement(averaged_metrics_df, x_column='param_theta', experiment_folder=experiment_path)
 
@@ -127,3 +118,9 @@ if __name__ == '__main__':
     #     x_column ='param_theta',
     #     experiment_folder=experiment_path)
 
+
+    # CONVERGENCE
+
+    df = read_and_average_energy_histories(experiment_path, "param_theta")
+    check_outliers(df)
+    # plot_averaged_energy_histories(df, "param_theta", experiment_path)

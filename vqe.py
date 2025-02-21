@@ -71,8 +71,30 @@ def create_hea(num_qubits, depth, ansatz_id):
 
             circuit.barrier()
 
+    elif ansatz_id == 4:
+        # Ansatz 4: Uneven entanglement structure, Circuit 15 as shown in sim expressibility (low expr.) but RYRX
+        theta_list = [[Parameter(f'θ_{i}{j}') for j in range(2)] for i in range(num_qubits)]
+
+        for d in range(depth):
+            for i in range(num_qubits):
+                circuit.ry(theta_list[i][0], i)
+
+            for i in range(0, num_qubits - 1, 2):
+                circuit.cx(i, i + 1)
+
+            circuit.barrier()
+
+            for i in range(num_qubits):
+                circuit.rx(theta_list[i][1], i)
+
+            for i in range(1, num_qubits - 1, 2):
+                circuit.cx(i, i + 1)
+            circuit.cx(num_qubits - 1, 0)
+
+            circuit.barrier()
+
     else:
-        raise ValueError("Invalid ansatz_id. Supported ids are 1, 2 and 3.")
+        raise ValueError("Invalid ansatz_id. Supported ids are 1, 2, 3 and 4.")
 
     random_params = np.random.uniform(-0.001, 0.001, len(theta_list))
     return circuit, random_params
