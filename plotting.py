@@ -401,6 +401,84 @@ def plot_average_time_per_graph(df, experiment_folder):
     # df = pd.DataFrame(data)
     # plot_average_time_per_graph(df, "plots")
 
+# data = {
+#     'nodes': [8]*9 + [10]*9 + [12]*9 + [14]*9 + [16]*9,
+#     'ansatz_type': ['HEA_1']*3 + ['HEA_2']*3 + ['HEA_3']*3 +
+#                    ['HEA_1']*3 + ['HEA_2']*3 + ['HEA_3']*3 +
+#                    ['HEA_1']*3 + ['HEA_2']*3 + ['HEA_3']*3 +
+#                    ['HEA_1']*3 + ['HEA_2']*3 + ['HEA_3']*3 +
+#                    ['HEA_1']*3 + ['HEA_2']*3 + ['HEA_3']*3,
+#     'ansatz_layers': [1, 3, 5]*15,
+#     'iteration_time': ["0:00", "0:07", "0:11", "0:04", "0:10", "0:14", "0:01", "0:07", "0:08",
+#                        "0:02", "0:10", "0:13", "0:05", "0:13", "0:21", "0:03", "0:09", "0:12",
+#                        "0:11", "0:18", "0:24", "0:13", "0:23", "0:33", "0:07", "0:17", "0:20",
+#                        "1:27", "1:38", "1:45", "1:32", "1:44", "1:58", "1:25", "1:35", "1:41",
+#                        "23:24", "24:33", "24:19", "23:42", "24:15", "24:14", "23:23", "24:04", "24:08"]
+# }
+
+# Convert the iteration_time to seconds for plotting
+def time_to_seconds(time_str):
+    minutes, seconds = map(int, time_str.split(':'))
+    return minutes * 60 + seconds
+
+# df = pd.DataFrame(data)
+# df['iteration_time_seconds'] = df['iteration_time'].apply(time_to_seconds)
+
+# Function to plot the data with lines per ansatz type and layer count
+def plot_iteration_time(df, experiment_folder):
+    """
+    Plot iteration time against the number of nodes with lines per ansatz type and layer count.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing 'nodes', 'ansatz_type', 'ansatz_layers', and 'iteration_time_seconds'.
+        experiment_folder (str): Path to save the plot.
+    """
+    # Formatter for y-axis (MM:SS)
+    def format_seconds(seconds):
+        minutes = int(seconds // 60)
+        sec = int(seconds % 60)
+        return f"{minutes}:{sec:02d}"
+
+    # Plot settings
+    plt.figure(figsize=(12, 8))
+    sns.set_theme(style="whitegrid")
+    sns.lineplot(
+        data=df,
+        x='nodes',
+        y='iteration_time_seconds',
+        hue='ansatz_type',
+        style='ansatz_layers',
+        markers=True,
+        dashes=False,
+        linewidth=2.5,
+        markersize=10
+    )
+
+    # Font size and labels
+    plt.xlabel("Number of Qubits (Nodes)", fontsize=16, weight='bold', labelpad=12)
+    plt.ylabel("Iteration Time (MM:SS)", fontsize=16, weight='bold', labelpad=12)
+    plt.title("Iteration Time vs Number of Nodes", fontsize=18, weight='bold', pad=15)
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+
+    # Format y-axis
+    plt.gca().yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: format_seconds(x)))
+
+    # Legend and layout
+    plt.legend(title='Ansatz Type / Layers', fontsize=12, title_fontsize=14)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.tight_layout()
+
+    # Save the plot
+    os.makedirs(experiment_folder, exist_ok=True)
+    save_path = os.path.join(experiment_folder, "iteration_time_plot.pdf")
+    plt.savefig(save_path, bbox_inches='tight', dpi=300)
+    plt.close()
+
+    print(f"Saved plot to {save_path}")
+
+# plot_iteration_time(df, "plots")
+
 
 ### EXPRESSIBILITY & ENTANGLEMENT ###
 
@@ -465,6 +543,11 @@ def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_f
         x_column (str): The column name for the x-axis (e.g., 'dropout_ratio', 'param_theta').
         experiment_folder (str): Path to the experiment folder where the plots will be saved.
     """
+    plt.rcParams.update({
+        'xtick.labelsize': 14,  # X-axis tick font size
+        'ytick.labelsize': 14,  # Y-axis tick font size
+    })
+
     ansatz_labels = {
         "HEA_1": "Circuit 1",
         "HEA_2": "Circuit 2",
@@ -522,16 +605,16 @@ def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_f
         # **Legend customization**
         marker_legend = [Line2D([0], [0], marker=marker_styles[layer], linestyle="", color="black", label=f"Layers: {layer}") for layer in marker_styles]
         color_legend = [Line2D([0], [0], linestyle="-", color=palette[ansatz], label=ansatz) for ansatz in palette]
-        legend1 = plt.legend(handles=color_legend, title="Ansatz Type", loc="upper right")
+        legend1 = plt.legend(handles=color_legend, title="Ansatz Type", loc="upper right", fontsize=12, title_fontsize=13)
         plt.gca().add_artist(legend1)
-        plt.legend(handles=marker_legend, title="Layers", loc="upper left")
+        plt.legend(handles=marker_legend, title="Layers", loc="upper left", fontsize=12, title_fontsize=13)
 
-        plt.title(f"{metric_label} vs {x_column.replace('_', ' ').title()}")
-        plt.xlabel(x_column.replace('_', ' ').title())
-        plt.ylabel(metric_label)
-        plt.grid(True)
+        plt.title(f"{metric_label} vs {x_column.replace('_', ' ').title()}", fontsize=17)
+        plt.xlabel(x_column.replace('_', ' ').title(), fontsize=15)
+        plt.ylabel(metric_label, fontsize=15)
+        plt.grid(True, linestyle='--', alpha=0.6)
 
-        save_path = os.path.join(experiment_folder, f"{metric}_vs_{x_column}_by_ansatz_type_and_layers.png")
+        save_path = os.path.join(experiment_folder, f"{metric}_vs_{x_column}_by_ansatz_type_and_layers.pdf")
         plt.savefig(save_path)
         plt.close()
         print(f"Saved plot to {save_path}")
@@ -545,37 +628,34 @@ def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_f
                 if layer_data[q10_col].isna().all() or layer_data[q90_col].isna().all():
                     continue
 
-                # Manually set line colors to match ansatz type
-                line_color = palette[ansatz]  # Force correct ansatz color
+                line_color = palette[ansatz]
                 ax.fill_between(layer_data[x_column],
                                 layer_data[q10_col],
                                 layer_data[q90_col],
                                 alpha=0.1, color=shade_palette.get(ansatz, "gray"))
                 ax.plot(layer_data[x_column], layer_data[metric],
                         marker=marker_styles.get(layer, "o"), linestyle="-",
-                        color=line_color)  # Force line color
+                        color=line_color)
 
-        # **Set axis labels manually**
         for ax in g.axes.flat:
-            ax.set_xlabel(x_column.replace("_", " ").title())  # Set x-label for all subplots
-        g.axes[0, 0].set_ylabel(metric_label)  # Set y-label only for the leftmost subplot
+            ax.set_xlabel(x_column.replace("_", " ").title(), fontsize=15)
+        g.axes[0, 0].set_ylabel(metric_label, fontsize=15)  # y-label only for the leftmost subplot
 
-        # **Fix subplot titles to only show "HEA_1", "HEA_2", etc.**
         for ax, ansatz in zip(g.axes.flat, metrics_df['ansatz_type'].unique()):
-            ax.set_title(ansatz.replace("ansatz_type = ", ""))  # Remove unnecessary text
+            ax.set_title(ansatz.replace("ansatz_type = ", ""), fontsize=15)
 
-        # **Manually add legend in the rightmost subplot**
-        rightmost_ax = g.axes.flat[-1]  # Get the rightmost subplot
+        # legend in the rightmost subplot
+        rightmost_ax = g.axes.flat[-1]
         layer_legend = [
             Line2D([0], [0], marker=marker_styles[layer], linestyle="", color="black", label=f"Layers: {layer}")
             for layer in marker_styles
         ]
-        rightmost_ax.legend(handles=layer_legend, title="Layers", loc="upper right")
+        rightmost_ax.legend(handles=layer_legend, title="Layers", loc="upper right", fontsize=12, title_fontsize=13)
 
         plt.subplots_adjust(top=0.85)
-        g.fig.suptitle(f"{metric_label} vs {x_column.replace('_', ' ').title()}")
+        g.fig.suptitle(f"{metric_label} vs {x_column.replace('_', ' ').title()}", fontsize=17)
 
-        save_path = os.path.join(experiment_folder, f"{metric}_vs_{x_column}_facet_by_ansatz_type.png")
+        save_path = os.path.join(experiment_folder, f"{metric}_vs_{x_column}_facet_by_ansatz_type.pdf")
         g.savefig(save_path)
         print(f"Saved plot to {save_path}")
 
@@ -593,6 +673,11 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
         x_column (str): The column name for the x-axis (e.g., 'dropout_ratio', 'param_theta').
         experiment_folder (str): Path to the experiment folder where the plots will be saved.
     """
+    plt.rcParams.update({
+        'xtick.labelsize': 14,  # X-axis tick font size
+        'ytick.labelsize': 14,  # Y-axis tick font size
+    })
+
     ansatz_labels = {
         "HEA_1": "Circuit 1",
         "HEA_2": "Circuit 2",
@@ -643,21 +728,21 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
     # Create separate legends for Ansatz types and Layers
     marker_legend = [Line2D([0], [0], marker=marker_styles[layer], linestyle="", color="black", label=f"Layers: {layer}") for layer in marker_styles]
     color_legend = [Line2D([0], [0], linestyle="-", color=palette[ansatz], label=ansatz) for ansatz in palette]
-    legend1 = plt.legend(handles=color_legend, title="Ansatz Type", loc="upper right")
+    legend1 = plt.legend(handles=color_legend, title="Ansatz Type", loc="upper right", fontsize=12, title_fontsize=13)
     plt.gca().add_artist(legend1)
-    plt.legend(handles=marker_legend, title="Layers", loc="upper left")
+    plt.legend(handles=marker_legend, title="Layers", loc="upper left", fontsize=12, title_fontsize=13)
 
-    plt.title(f"{metric_label} vs {x_column.replace('_', ' ').title()}")
-    plt.xlabel(x_column.replace('_', ' ').title())
-    plt.ylabel(metric_label)
+    plt.title(f"{metric_label} vs {x_column.replace('_', ' ').title()}", fontsize=17)
+    plt.xlabel(x_column.replace('_', ' ').title(), fontsize=15)
+    plt.ylabel(metric_label, fontsize=15)
     plt.grid(True)
 
-    save_path = os.path.join(experiment_folder, f"approximation_ratio_vs_{x_column}_by_ansatz_type_and_layers.png")
+    save_path = os.path.join(experiment_folder, f"approximation_ratio_vs_{x_column}_by_ansatz_type_and_layers.pdf")
     plt.savefig(save_path)
     plt.close()
     print(f"Saved plot to {save_path}")
 
-    # **FacetGrid for separate subplots per ansatz_type with Q10-Q90 shadow and different markers**
+    # FacetGrid for separate subplots per ansatz_type with Q10-Q90 shadow and different markers
     g = sns.FacetGrid(metrics_df, col="ansatz_type", height=5, aspect=1.2, sharey=True, sharex=True)
 
     for ax, ansatz in zip(g.axes.flat, metrics_df['ansatz_type'].unique()):
@@ -667,7 +752,7 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
             if layer_data[q10_col].isna().all() or layer_data[q90_col].isna().all():
                 continue
 
-            line_color = palette[ansatz]  # Ensure correct ansatz color
+            line_color = palette[ansatz]
             # ax.fill_between(layer_data[x_column],
             #                 layer_data[q10_col],
             #                 layer_data[q90_col],
@@ -678,25 +763,23 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
 
     # **Set axis labels manually**
     for ax in g.axes.flat:
-        ax.set_xlabel(x_column.replace("_", " ").title())  # X-label for all subplots
-    g.axes[0, 0].set_ylabel(metric_label)  # Y-label only for leftmost subplot
+        ax.set_xlabel(x_column.replace("_", " ").title(), fontsize=15)
+    g.axes[0, 0].set_ylabel(metric_label, fontsize=15)  # Y-label only for leftmost subplot
 
-    # **Fix subplot titles to only show "HEA_1", "HEA_2", "HEA_3"**
     for ax, ansatz in zip(g.axes.flat, metrics_df['ansatz_type'].unique()):
-        ax.set_title(ansatz.replace("ansatz_type = ", ""))  # Clean title
+        ax.set_title(ansatz.replace("ansatz_type = ", ""))
 
-    # **Manually add legend in the rightmost subplot**
-    rightmost_ax = g.axes.flat[-1]  # Get the rightmost subplot
+    rightmost_ax = g.axes.flat[-1]
     layer_legend = [
         Line2D([0], [0], marker=marker_styles[layer], linestyle="", color="black", label=f"Layers: {layer}")
         for layer in marker_styles
     ]
-    rightmost_ax.legend(handles=layer_legend, title="Layers", loc="upper right")
+    rightmost_ax.legend(handles=layer_legend, title="Layers", loc="upper right", fontsize=12, title_fontsize=13)
 
     plt.subplots_adjust(top=0.85)
-    g.fig.suptitle(f"{metric_label} vs {x_column.replace('_', ' ').title()}")
+    g.fig.suptitle(f"{metric_label} vs {x_column.replace('_', ' ').title()}", fontsize=17)
 
-    save_path = os.path.join(experiment_folder, f"approximation_ratio_vs_{x_column}_facet_by_ansatz_type.png")
+    save_path = os.path.join(experiment_folder, f"approximation_ratio_vs_{x_column}_facet_by_ansatz_type.pdf")
     g.savefig(save_path)
     print(f"Saved plot to {save_path}")
 
@@ -814,41 +897,56 @@ def plot_averaged_energy_histories(df, x_column, out_path):
     """
     Plots averaged energy histories with:
       - Subplots: ansatz_type
-      - Color: param_value
+      - Color: param_value (inverted order for brightness)
       - Marker: ansatz_layers
-
-    Args:
-        df (pd.DataFrame): DataFrame with 'param_value', 'energy_history', 'ansatz_type', and 'ansatz_layers'.
-        x_column (str): Parameter for the x-axis ('dropout_ratio' or 'param_theta').
-        out_path (str): Directory to save the plot.
+      - Horizontal legends (Parameter and Layers side by side with wider gap)
     """
-    # Map ansatz_type to human-readable names
+    plt.rcParams.update({
+        'xtick.labelsize': 14,  # X-axis tick font size
+        'ytick.labelsize': 14,  # Y-axis tick font size
+    })
+
+    df = df.copy()
+
+    # Map ansatz_type to readable names
     ansatz_labels = {"HEA_1": "Circuit 1", "HEA_2": "Circuit 2", "HEA_3": "Circuit 3"}
     df['ansatz_type'] = df['ansatz_type'].replace(ansatz_labels)
 
-    # Exclude "Circuit 1" with 1 layer (outlier removal)
-    df = df[~((df['ansatz_type'] == "Circuit 1") & (df['ansatz_layers'] == "1"))]
+    # Remove outlier: Circuit 1 with 1 layer
+    df = df.loc[~((df['ansatz_type'] == "Circuit 1") & (df['ansatz_layers'] == 1))]
 
-    # Ensure ansatz_types are ordered as Circuit 1, Circuit 2, Circuit 3
-    ansatz_order = ["Circuit 1", "Circuit 2", "Circuit 3"]
-    df['ansatz_type'] = pd.Categorical(df['ansatz_type'], categories=ansatz_order, ordered=True)
-    df = df.sort_values('ansatz_type')
-    print(df)
+    # Round param_value for consistency
+    df['param_value_rounded'] = df['param_value'].round(2)
+
+    # Label mapping depending on x_column
+    if x_column == "param_theta":
+        theta_label_map = {1.57: r'$\pi/2$', 0.79: r'$\pi/4$', 0.39: r'$\pi/8$'}
+        df['param_label'] = df['param_value_rounded'].map(theta_label_map)
+        param_title = "Theta Parameter"
+        param_legend_pos = (0.30, 1.05)
+        layers_legend_pos = (0.60, 1.05)
+    elif x_column == "dropout_ratio":
+        df['param_label'] = df['param_value_rounded'].apply(lambda x: f"{x:.2f}")
+        param_title = "Dropout Rate"
+        param_legend_pos = (0.30, 1.05)
+        layers_legend_pos = (0.70, 1.05)
+    else:
+        raise ValueError("Unsupported x_column. Use 'param_theta' or 'dropout_ratio'.")
+
     # Marker styles for layers
     marker_styles = {"1": "o", "3": "s", "5": "^"}
     df['ansatz_layers'] = df['ansatz_layers'].astype(str)
 
-    # Color mapping for param_value
-    unique_param_values = sorted(df['param_value'].unique())
+    # Inverted color mapping
+    unique_param_values = sorted(df['param_value_rounded'].unique())
     cmap = cm.get_cmap('viridis', len(unique_param_values))
     color_map = {val: cmap(i / (len(unique_param_values) - 1)) for i, val in enumerate(unique_param_values)}
 
-    # Subplot setup
-    ansatz_types = ansatz_order
-    num_ansatz = len(ansatz_types)
-    fig, axes = plt.subplots(1, num_ansatz, figsize=(6 * num_ansatz, 6), sharey=True)
+    # Create subplots
+    ansatz_order = ["Circuit 1", "Circuit 2", "Circuit 3"]
+    fig, axes = plt.subplots(1, len(ansatz_order), figsize=(6 * len(ansatz_order), 6), sharey=True)
 
-    for ax, ansatz in zip(axes, ansatz_types):
+    for ax, ansatz in zip(axes, ansatz_order):
         subset = df[df['ansatz_type'] == ansatz]
         for _, row in subset.iterrows():
             steps = [10 * (i + 1) for i in range(len(row['energy_history']))]
@@ -856,49 +954,66 @@ def plot_averaged_energy_histories(df, x_column, out_path):
                 steps,
                 row['energy_history'],
                 marker=marker_styles.get(row['ansatz_layers'], "o"),
-                color=color_map.get(row['param_value'], "black"),
+                color=color_map.get(row['param_value_rounded'], "black"),
                 linestyle="-",
-                alpha=0.8,
-                label=f"{x_column}: {row['param_value']:.2f}, Layers: {row['ansatz_layers']}"
+                alpha=0.85
             )
-
         ax.set_title(ansatz, fontsize=14)
-        ax.set_xlabel("Step", fontsize=12)
+        ax.set_xlabel("Step", fontsize=15)
         ax.grid(True, linestyle='--', alpha=0.6)
 
-    axes[0].set_ylabel("Averaged Energy", fontsize=12)
+    axes[0].set_ylabel("Averaged Energy", fontsize=15)
 
-    # Legends
+    # Legends setup
     color_legend = [
-        Line2D([0], [0], linestyle="", marker="o", color=color_map[val], label=f"{x_column}: {val:.2f}")
+        Line2D([0], [0], linestyle="-", color=color_map[val], label=df[df['param_value_rounded'] == val]['param_label'].iloc[0])
         for val in unique_param_values
     ]
 
     marker_legend = [
-        Line2D([0], [0], linestyle="", marker=marker_styles[layer], color="black", label=f"Layers: {layer}")
+        Line2D([0], [0], linestyle="", marker=marker_styles[layer], color="black", label=f"{layer} Layers")
         for layer in marker_styles
     ]
 
-    # Add combined legends outside the plots
-    plt.figlegend(
-        handles=color_legend + marker_legend,
+    # Add Parameter Legend (left side)
+    # Add Parameter Legend with dynamic spacing
+    fig.legend(
+        handles=color_legend,
         loc="upper center",
-        bbox_to_anchor=(0.5, 1.05),
-        ncol=len(unique_param_values) + len(marker_styles),
-        title="Legend",
-        fontsize=10
+        bbox_to_anchor=param_legend_pos,
+        ncol=len(color_legend),
+        fontsize=12,
+        title_fontsize=13,
+        title=param_title
     )
 
-    plt.suptitle("Averaged Energy Convergence per Ansatz Type", fontsize=16, y=1.10)
+    # Add Layers Legend with dynamic spacing
+    fig.legend(
+        handles=marker_legend,
+        loc="upper center",
+        bbox_to_anchor=layers_legend_pos,
+        ncol=len(marker_legend),
+        fontsize=12,
+        title_fontsize=13,
+        title="Layers"
+    )
+
+    # Plot title
+    plt.suptitle("Averaged Energy Convergence per Ansatz Type", fontsize=16, y=1.18)
+
+    # Layout adjustments
+    plt.subplots_adjust(top=0.78)
     plt.tight_layout()
 
     # Save plot
     os.makedirs(out_path, exist_ok=True)
-    output_file = os.path.join(out_path, "averaged_energy_subplots.png")
+    output_file = os.path.join(out_path, "averaged_energy_subplots.pdf")
     plt.savefig(output_file, bbox_inches='tight')
     plt.close()
 
-    print(f"Plot saved to {output_file}")
+    print(f"Plot saved to: {output_file}")
+
+
 
 def check_outliers(df):
     """

@@ -122,5 +122,5 @@ if __name__ == '__main__':
     # CONVERGENCE
 
     df = read_and_average_energy_histories(experiment_path, "param_theta")
-    check_outliers(df)
-    # plot_averaged_energy_histories(df, "param_theta", experiment_path)
+    # check_outliers(df)
+    plot_averaged_energy_histories(df, "param_theta", experiment_path)
