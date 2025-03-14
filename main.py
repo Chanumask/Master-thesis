@@ -107,13 +107,10 @@ if __name__ == '__main__':
     # experiment_path = "FINAL_RESULTS/dropout/approx"
     # experiment_path = "results"
 
-
-    # metrics_df = read_all_runs(config_name,experiment_path,[61])
-    # plot_average_iteration_time(metrics_df, experiment_path)
-
     ### AVERAGED EXPERIMENTS
 
     # averaged_metrics_df = read_and_average_experiments(experiment_path, config_name, 'dropout_ratio')   # param_theta , dropout_ratio
+
     # plot_combined_expressibility_entanglement(averaged_metrics_df, x_column='dropout_ratio', experiment_folder=experiment_path)
 
     # plot_combined_approximation_ratio(
