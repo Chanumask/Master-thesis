@@ -563,8 +563,11 @@ def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_f
     marker_styles = {"1": "o", "3": "s", "5": "^"}
 
     # Define colors for ansatz types
-    palette = {"Circuit 1": "blue", "Circuit 2": "red", "Circuit 3": "green"} #, "Circuit 4": "purple" }
-    shade_palette = {"Circuit 1": "lightblue", "Circuit 2": "lightcoral", "Circuit 3": "lightgreen"} # , "Circuit 4": "plum"}
+    palette_expr = {"Circuit 1": "#08306b", "Circuit 2": "#2171b5", "Circuit 3": "#6baed6"}  # Dark Navy, Deep Blue, Sky Blue
+    shade_palette_expr = {"Circuit 1": "#9ecae1", "Circuit 2": "#9ecae1", "Circuit 3": "#9ecae1"}  # Light Sky Blue variations
+
+    palette_entcap = {"Circuit 1": "#00441b", "Circuit 2": "#238b45", "Circuit 3": "#66c2a4"}  # Deep Forest Green, Rich Green, Aqua Green
+    shade_palette_entcap = {"Circuit 1": "#74c476", "Circuit 2": "#74c476", "Circuit 3": "#74c476"}  # Light Green variations
 
     # Define a separate palette for ansatz layers (needed for FacetGrid)
     layer_palette = {"1": "black", "3": "gray", "5": "dimgray"}
@@ -578,6 +581,10 @@ def plot_combined_expressibility_entanglement(metrics_df, x_column, experiment_f
         if metric not in metrics_df.columns or metrics_df[metric].isna().all():
             print(f"Skipping {metric_label} because all values are NaN.")
             continue
+
+        # Select the appropriate color palette based on the metric
+        palette = palette_expr if "expressibility" in metric else palette_entcap
+        shade_palette = shade_palette_expr if "expressibility" in metric else shade_palette_entcap
 
         # **Single grouped plot with all ansätze together**
         plt.figure(figsize=(10, 6))
@@ -691,8 +698,8 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
 
     # Define marker styles for different layers
     marker_styles = {"1": "o", "3": "s", "5": "^"}
-    palette = {"Circuit 1": "blue", "Circuit 2": "red", "Circuit 3": "green"} #, "Circuit 4": "purple" }
-    shade_palette = {"Circuit 1": "lightblue", "Circuit 2": "lightcoral", "Circuit 3": "lightgreen"} # , "Circuit 4": "plum"}
+    palette = {"Circuit 1": "#d62728", "Circuit 2": "#b2182b", "Circuit 3": "#7f0000"}  # Red to Dark Red/Purple
+    shade_palette = {"Circuit 1": "#ff9999", "Circuit 2": "#e78ac3", "Circuit 3": "#d6604d"}  # Light Reds/Pinks
 
     metric = 'mean_approximation'
     q10_col = 'q10_approximation'
@@ -767,7 +774,7 @@ def plot_combined_approximation_ratio(metrics_df, x_column, experiment_folder):
     g.axes[0, 0].set_ylabel(metric_label, fontsize=15)  # Y-label only for leftmost subplot
 
     for ax, ansatz in zip(g.axes.flat, metrics_df['ansatz_type'].unique()):
-        ax.set_title(ansatz.replace("ansatz_type = ", ""))
+        ax.set_title(ansatz.replace("ansatz_type = ", ""), fontsize=15)
 
     rightmost_ax = g.axes.flat[-1]
     layer_legend = [
@@ -1044,3 +1051,390 @@ def check_outliers(df):
     plt.grid(True, linestyle='--', alpha=0.6)
     plt.savefig("outliers", bbox_inches='tight')
     plt.close()
+
+
+### PRESTUDY ###
+
+def read_and_average_experiments_prestudy(experiment_path, config_name):
+    """
+    Reads all experiments within a directory and aggregates their metrics,
+    computing mean, standard deviation, confidence intervals, and quantiles.
+
+    Args:
+        experiment_path (str): Path containing all experiment subdirectories.
+        config_name (str): Configuration name for identifying CSV files.
+
+    Returns:
+        pd.DataFrame: DataFrame containing aggregated metrics with variability estimates.
+    """
+    all_experiment_ids = []
+
+    # Identify available experiments
+    for folder_name in os.listdir(experiment_path):
+        if folder_name.startswith("Experiment_"):
+            try:
+                experiment_id = int(folder_name.replace("Experiment_", ""))
+                all_experiment_ids.append(experiment_id)
+            except ValueError:
+                continue
+
+    if not all_experiment_ids:
+        raise ValueError(f"No valid experiments found in {experiment_path}")
+
+    print("Processing experiments:", all_experiment_ids)
+
+    # Read data from all experiments
+    combined_df = read_all_runs(config_name, experiment_path=experiment_path, experiment_ids=all_experiment_ids)
+    metrics_df = extract_metrics(combined_df)
+
+    # Compute aggregation functions safely
+    def safe_agg(column):
+        return np.nan if column.dropna().empty else column.mean()
+
+    def safe_std(column):
+        return np.nan if column.dropna().empty else column.std()
+
+    def safe_ci(column):
+        return np.nan if column.dropna().empty or len(column.dropna()) < 2 else 1.645 * sum(column.dropna())
+
+    def safe_quantile(column, q):
+        return np.nan if column.dropna().empty else column.quantile(q)
+
+    # Aggregate metrics by node count, ansatz type, and ansatz layers
+    aggregated_metrics = metrics_df.groupby(['nodes', 'ansatz_type', 'ansatz_layers']).agg(
+        mean_expressibility=('expressibility', safe_agg),
+        std_expressibility=('expressibility', safe_std),
+        ci_expressibility=('expressibility', safe_ci),
+        q10_expressibility=('expressibility', lambda x: safe_quantile(x, 0.1)),
+        q90_expressibility=('expressibility', lambda x: safe_quantile(x, 0.9)),
+
+        mean_entangling=('entangling_capability', safe_agg),
+        std_entangling=('entangling_capability', safe_std),
+        ci_entangling=('entangling_capability', safe_ci),
+        q10_entangling=('entangling_capability', lambda x: safe_quantile(x, 0.1)),
+        q90_entangling=('entangling_capability', lambda x: safe_quantile(x, 0.9)),
+
+        mean_approximation=('approximation_ratio', safe_agg),
+        std_approximation=('approximation_ratio', safe_std),
+        ci_approximation=('approximation_ratio', safe_ci),
+        q10_approximation=('approximation_ratio', lambda x: safe_quantile(x, 0.1)),
+        q90_approximation=('approximation_ratio', lambda x: safe_quantile(x, 0.9))
+    ).reset_index()
+
+    return aggregated_metrics
+
+
+def plot_combined_expressibility_entanglement_prestudy(metrics_df, experiment_folder):
+    """
+    Plot expressibility and entangling capability with error bands, grouped by ansatz type and layers.
+    It generates both a single grouped plot and separate subplots per ansatz type.
+
+    Args:
+        metrics_df (pd.DataFrame): DataFrame containing the metrics with variability measures.
+        experiment_folder (str): Path to the experiment folder where the plots will be saved.
+    """
+    plt.rcParams.update({'xtick.labelsize': 14, 'ytick.labelsize': 14})
+
+    ansatz_labels = {
+        "HEA_1": "Circuit 1",
+        "HEA_2": "Circuit 2",
+        "HEA_3": "Circuit 3",
+    }
+
+    metrics_df['ansatz_type'] = metrics_df['ansatz_type'].replace(ansatz_labels)
+    metrics_df['ansatz_layers'] = metrics_df['ansatz_layers'].astype(str)
+    metrics_df['ansatz_label'] = metrics_df['ansatz_type'] + " - Layers: " + metrics_df['ansatz_layers']
+
+    marker_styles = {"1": "o", "3": "s", "5": "^"}
+    palette = {"Circuit 1": "blue", "Circuit 2": "red", "Circuit 3": "green"}
+    shade_palette = {"Circuit 1": "lightblue", "Circuit 2": "lightcoral", "Circuit 3": "lightgreen"}
+
+    metrics_to_plot = [
+        ('mean_expressibility', 'q10_expressibility', 'q90_expressibility', 'Expressibility'),
+        ('mean_entangling', 'q10_entangling', 'q90_entangling', 'Entangling Capability')
+    ]
+
+    for metric, q10_col, q90_col, metric_label in metrics_to_plot:
+        if metric not in metrics_df.columns or metrics_df[metric].isna().all():
+            print(f"Skipping {metric_label} because all values are NaN.")
+            continue
+
+        plt.figure(figsize=(10, 6))
+        for ansatz in metrics_df['ansatz_type'].unique():
+            subset = metrics_df[metrics_df['ansatz_type'] == ansatz]
+            if subset[metric].isna().all():
+                continue
+
+            for layer in subset['ansatz_layers'].unique():
+                layer_data = subset[subset['ansatz_layers'] == layer]
+                sns.lineplot(
+                    data=layer_data,
+                    x='nodes',
+                    y=metric,
+                    label=f"{ansatz} - Layers: {layer}",
+                    marker=marker_styles.get(layer, "o"),
+                    color=palette.get(ansatz, "black")
+                )
+
+                if q10_col in layer_data.columns and q90_col in layer_data.columns:
+                    plt.fill_between(layer_data['nodes'],
+                                     layer_data[q10_col],
+                                     layer_data[q90_col], alpha=0.1, color=shade_palette.get(ansatz, "gray"))
+
+        marker_legend = [Line2D([0], [0], marker=marker_styles[layer], linestyle="", color="black", label=f"Layers: {layer}") for layer in marker_styles]
+        color_legend = [Line2D([0], [0], linestyle="-", color=palette[ansatz], label=ansatz) for ansatz in palette]
+        legend1 = plt.legend(handles=color_legend, title="Ansatz Type", loc="upper right", fontsize=12, title_fontsize=13)
+        plt.gca().add_artist(legend1)
+        plt.legend(handles=marker_legend, title="Layers", loc="upper left", fontsize=12, title_fontsize=13)
+
+        plt.title(f"{metric_label} vs Number of Nodes", fontsize=17)
+        plt.xlabel("Number of Nodes (Qubits)", fontsize=15)
+        plt.ylabel(metric_label, fontsize=15)
+        plt.grid(True, linestyle='--', alpha=0.6)
+
+        save_path = os.path.join(experiment_folder, f"{metric}_vs_nodes_by_ansatz_type_and_layers.pdf")
+        plt.savefig(save_path)
+        plt.close()
+        print(f"Saved plot to {save_path}")
+
+def plot_combined_approximation_ratio_prestudy(metrics_df, experiment_folder):
+    """
+    Plot approximation ratio with error bands, grouped by ansatz type and layers.
+    Generates both a single grouped plot and separate subplots per ansatz type.
+
+    Args:
+        metrics_df (pd.DataFrame): DataFrame containing the approximation ratio metrics.
+        experiment_folder (str): Path to the experiment folder where the plots will be saved.
+    """
+    plt.rcParams.update({'xtick.labelsize': 14, 'ytick.labelsize': 14})
+
+    ansatz_labels = {
+        "HEA_1": "Circuit 1",
+        "HEA_2": "Circuit 2",
+        "HEA_3": "Circuit 3",
+    }
+
+    metrics_df['ansatz_type'] = metrics_df['ansatz_type'].replace(ansatz_labels)
+    metrics_df['ansatz_layers'] = metrics_df['ansatz_layers'].astype(str)
+    metrics_df['ansatz_label'] = metrics_df['ansatz_type'] + " - Layers: " + metrics_df['ansatz_layers']
+
+    marker_styles = {"1": "o", "3": "s", "5": "^"}
+    palette = {"Circuit 1": "blue", "Circuit 2": "red", "Circuit 3": "green"}
+    shade_palette = {"Circuit 1": "lightblue", "Circuit 2": "lightcoral", "Circuit 3": "lightgreen"}
+
+    metric = 'mean_approximation'
+    q10_col = 'q10_approximation'
+    q90_col = 'q90_approximation'
+    metric_label = 'Approximation Ratio'
+
+    if metric not in metrics_df.columns or metrics_df[metric].isna().all():
+        print(f"Skipping {metric_label} because all values are NaN.")
+        return
+
+    # **Single grouped plot with variability bands**
+    plt.figure(figsize=(10, 6))
+
+    for ansatz in metrics_df['ansatz_type'].unique():
+        subset = metrics_df[metrics_df['ansatz_type'] == ansatz]
+        if subset[metric].isna().all():
+            continue
+
+        for layer in subset['ansatz_layers'].unique():
+            layer_data = subset[subset['ansatz_layers'] == layer]
+            sns.lineplot(
+                data=layer_data,
+                x='nodes',
+                y=metric,
+                marker=marker_styles.get(layer, "o"),
+                color=palette.get(ansatz, "black"),
+                label=f"{ansatz} - Layers: {layer}"
+            )
+
+            if q10_col in layer_data.columns and q90_col in layer_data.columns:
+                plt.fill_between(layer_data['nodes'],
+                                 layer_data[q10_col],
+                                 layer_data[q90_col], alpha=0.1, color=shade_palette.get(ansatz, "gray"))
+
+    marker_legend = [
+        Line2D([0], [0], marker=marker_styles[layer], linestyle="", color="black", label=f"Layers: {layer}") for
+        layer in marker_styles]
+    color_legend = [Line2D([0], [0], linestyle="-", color=palette[ansatz], label=ansatz) for ansatz in palette]
+
+    legend1 = plt.legend(handles=color_legend, title="Ansatz Type", loc="upper right", fontsize=12,
+                         title_fontsize=13)
+    plt.gca().add_artist(legend1)
+    plt.legend(handles=marker_legend, title="Layers", loc="upper left", fontsize=12, title_fontsize=13)
+
+    plt.title(f"{metric_label} vs Number of Nodes", fontsize=17)
+    plt.xlabel("Number of Nodes (Qubits)", fontsize=15)
+    plt.ylabel(metric_label, fontsize=15)
+    plt.grid(True, linestyle='--', alpha=0.6)
+
+    save_path = os.path.join(experiment_folder, f"approximation_ratio_vs_nodes_by_ansatz_type_and_layers.pdf")
+    plt.savefig(save_path)
+    plt.close()
+    print(f"Saved plot to {save_path}")
+
+    # **FacetGrid for Separate Plots per Ansatz Type**
+    g = sns.FacetGrid(metrics_df, col="ansatz_type", height=5, aspect=1.2, sharey=True, sharex=True)
+
+    for ax, ansatz in zip(g.axes.flat, metrics_df['ansatz_type'].unique()):
+        subset = metrics_df[metrics_df['ansatz_type'] == ansatz]
+        for layer in subset['ansatz_layers'].unique():
+            layer_data = subset[subset['ansatz_layers'] == layer]
+            if layer_data[q10_col].isna().all() or layer_data[q90_col].isna().all():
+                continue
+
+            line_color = palette[ansatz]
+            ax.fill_between(layer_data['nodes'],
+                            layer_data[q10_col],
+                            layer_data[q90_col],
+                            alpha=0.1, color=shade_palette.get(ansatz, "gray"))
+            ax.plot(layer_data['nodes'], layer_data[metric],
+                    marker=marker_styles.get(layer, "o"), linestyle="-",
+                    color=line_color)
+
+    for ax in g.axes.flat:
+        ax.set_xlabel("Number of Nodes (Qubits)", fontsize=15)
+    g.axes[0, 0].set_ylabel(metric_label, fontsize=15)
+
+    for ax, ansatz in zip(g.axes.flat, metrics_df['ansatz_type'].unique()):
+        ax.set_title(ansatz.replace("ansatz_type = ", ""), fontsize=15)
+
+    rightmost_ax = g.axes.flat[-1]
+    layer_legend = [
+        Line2D([0], [0], marker=marker_styles[layer], linestyle="", color="black", label=f"Layers: {layer}")
+        for layer in marker_styles
+    ]
+    rightmost_ax.legend(handles=layer_legend, title="Layers", loc="upper right", fontsize=12, title_fontsize=13)
+
+    plt.subplots_adjust(top=0.85)
+    g.fig.suptitle(f"{metric_label} vs Number of Nodes", fontsize=17)
+
+    save_path = os.path.join(experiment_folder, f"approximation_ratio_vs_nodes_facet_by_ansatz_type.pdf")
+    g.savefig(save_path)
+    print(f"Saved plot to {save_path}")
+
+
+### CIRCUIT 4 ###
+
+def plot_circuit4_expressibility_entanglement(metrics_df, x_column, experiment_folder):
+    """
+    Plot expressibility and entangling capability with error bands,
+    but only for Circuit 4.
+
+    Args:
+        metrics_df (pd.DataFrame): DataFrame containing the metrics.
+        x_column (str): The column name for the x-axis (e.g., 'nodes').
+        experiment_folder (str): Path where the plots will be saved.
+    """
+    plt.rcParams.update({'xtick.labelsize': 14, 'ytick.labelsize': 14})
+
+    # Filter dataset to include only Circuit 4
+    circuit4_df = metrics_df[metrics_df['ansatz_type'] == "HEA_4"].copy()
+
+    if circuit4_df.empty:
+        print("No data available for Circuit 4.")
+        return
+
+    circuit4_df['ansatz_layers'] = circuit4_df['ansatz_layers'].astype(str)
+
+    marker_styles = {"1": "o", "3": "s", "5": "^"}
+    color_palette = {"Circuit 4": "purple"}
+    shade_palette = {"Circuit 4": "plum"}
+
+    metrics_to_plot = [
+        ('mean_expressibility', 'q10_expressibility', 'q90_expressibility', 'Expressibility'),
+        ('mean_entangling', 'q10_entangling', 'q90_entangling', 'Entangling Capability')
+    ]
+
+    for metric, q10_col, q90_col, metric_label in metrics_to_plot:
+        if metric not in circuit4_df.columns or circuit4_df[metric].isna().all():
+            print(f"Skipping {metric_label} because all values are NaN.")
+            continue
+
+        plt.figure(figsize=(8, 5))
+        for layer in circuit4_df['ansatz_layers'].unique():
+            layer_data = circuit4_df[circuit4_df['ansatz_layers'] == layer]
+            sns.lineplot(
+                data=layer_data,
+                x=x_column,
+                y=metric,
+                marker=marker_styles.get(layer, "o"),
+                color=color_palette["Circuit 4"],
+                label=f"Layers: {layer}"
+            )
+            plt.fill_between(layer_data[x_column],
+                             layer_data[q10_col],
+                             layer_data[q90_col], alpha=0.1, color=shade_palette["Circuit 4"])
+
+        plt.legend(title="Layers", fontsize=12, title_fontsize=13)
+        plt.title(f"{metric_label} for Circuit 4", fontsize=16)
+        plt.xlabel(x_column.replace('_', ' ').title(), fontsize=14)
+        plt.ylabel(metric_label, fontsize=14)
+        plt.grid(True, linestyle='--', alpha=0.6)
+
+        save_path = os.path.join(experiment_folder, f"{metric}_circuit4_vs_{x_column}.pdf")
+        plt.savefig(save_path)
+        plt.close()
+        print(f"Saved plot to {save_path}")
+
+
+def plot_circuit4_approximation_ratio(metrics_df, x_column, experiment_folder):
+    """
+    Plot approximation ratio but only for Circuit 4.
+
+    Args:
+        metrics_df (pd.DataFrame): DataFrame containing approximation ratio metrics.
+        x_column (str): The column name for the x-axis (e.g., 'nodes').
+        experiment_folder (str): Path where the plots will be saved.
+    """
+    plt.rcParams.update({'xtick.labelsize': 14, 'ytick.labelsize': 14})
+
+    # Filter dataset to include only Circuit 4
+    circuit4_df = metrics_df[metrics_df['ansatz_type'] == "HEA_4"].copy()
+
+    if circuit4_df.empty:
+        print("No data available for Circuit 4.")
+        return
+
+    circuit4_df['ansatz_layers'] = circuit4_df['ansatz_layers'].astype(str)
+
+    marker_styles = {"1": "o", "3": "s", "5": "^"}
+    color_palette = {"Circuit 4": "purple"}
+    shade_palette = {"Circuit 4": "plum"}
+
+    metric = 'mean_approximation'
+    q10_col = 'q10_approximation'
+    q90_col = 'q90_approximation'
+    metric_label = 'Approximation Ratio'
+
+    if metric not in circuit4_df.columns or circuit4_df[metric].isna().all():
+        print(f"Skipping {metric_label} because all values are NaN.")
+        return
+
+    plt.figure(figsize=(8, 5))
+    for layer in circuit4_df['ansatz_layers'].unique():
+        layer_data = circuit4_df[circuit4_df['ansatz_layers'] == layer]
+        sns.lineplot(
+            data=layer_data,
+            x=x_column,
+            y=metric,
+            marker=marker_styles.get(layer, "o"),
+            color=color_palette["Circuit 4"],
+            label=f"Layers: {layer}"
+        )
+        plt.fill_between(layer_data[x_column],
+                         layer_data[q10_col],
+                         layer_data[q90_col], alpha=0.1, color=shade_palette["Circuit 4"])
+
+    plt.legend(title="Layers", fontsize=12, title_fontsize=13)
+    plt.title(f"{metric_label} for Circuit 4", fontsize=16)
+    plt.xlabel(x_column.replace('_', ' ').title(), fontsize=14)
+    plt.ylabel(metric_label, fontsize=14)
+    plt.grid(True, linestyle='--', alpha=0.6)
+
+    save_path = os.path.join(experiment_folder, f"approximation_ratio_circuit4_vs_{x_column}.pdf")
+    plt.savefig(save_path)
+    plt.close()
+    print(f"Saved plot to {save_path}")

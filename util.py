@@ -176,13 +176,13 @@ def generate_qpic_circuit(circuit, scale_factor=1.0):
                 qpic_lines.append(f"q{target} Z q{control}")
             elif gate_name in ["rx", "ry", "rz"]:
                 theta = instruction.params[0]
-                indeces = f"{str(theta)[2]}{str(theta)[4]}"
+                indeces = f"{str(theta)[2]}"
                 label = f"{gate_name.upper()}(\\theta{indeces})"
                 qpic_lines.append(f"q{qubit_indices[0]} G {label} width=40")
             elif gate_name in ["crx", "crz"]:
                 control, target = qubit_indices
                 theta = instruction.params[0]
-                indeces = f"{str(theta)[2]}{str(theta)[4]}"
+                indeces = f"{str(theta)[2]}"
                 label = f"{gate_name.upper()}(\\theta{indeces})"
                 qpic_lines.append(f"q{target} G {label} q{control} width=50")
             else:

@@ -51,6 +51,10 @@ def generate_graph_from_config(config):
             degree = config['max_cut']['degree']
             graph = generate_regular_graph(degree, nodes)
 
+        elif graph_type == 'neighbor_connected':
+            max_weight = config['max_cut']['max_weight']
+            graph = generate_neighbor_connected_graph(nodes, max_weight)
+
         else:
             raise ValueError("Unknown graph type in conf file.")
 
@@ -92,6 +96,16 @@ def generate_regular_graph(degree, nodes):
         g.edges[u, v]['weight'] = np.random.randint(1, 11)
     return g
 
+
+def generate_neighbor_connected_graph(num_nodes, max_weight):
+    """Create a circular graph where each node is connected to its next neighbor and forms a ring."""
+    g = nx.Graph()
+
+    for i in range(num_nodes):
+        weight = np.random.randint(1, max_weight + 1)
+        g.add_edge(i, (i + 1) % num_nodes, weight=weight)  # Always connect to the next node, looping at the end
+
+    return g
 
 def construct_weighted_edges_from_graph(graph):
     """Convert a NetworkX graph into weighted edges."""
